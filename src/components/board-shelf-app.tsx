@@ -146,7 +146,7 @@ export function BoardShelfApp() {
     }
     return [...gamesByTag.entries()]
       .map(([tag, games]) => {
-        const dashboardGames = games.toSorted((first, second) => second.plays - first.plays || new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime());
+        const dashboardGames = games.toSorted((first, second) => (second.personalRating ?? 0) - (first.personalRating ?? 0) || second.plays - first.plays);
         const rankedGames = games.toSorted((first, second) => (second.personalRating ?? 0) - (first.personalRating ?? 0) || second.plays - first.plays);
         return { tag, count: games.length, games: dashboardGames.slice(0, 5), rankedGames };
       })
