@@ -9,6 +9,7 @@ import {
   Col,
   ConfigProvider,
   Divider,
+  Drawer,
   Empty,
   Form,
   Input,
@@ -32,6 +33,7 @@ import {
   DashboardOutlined,
   LockOutlined,
   LogoutOutlined,
+  MenuOutlined,
   InboxOutlined,
   PlusOutlined,
   SearchOutlined,
@@ -74,6 +76,7 @@ export function BoardShelfApp() {
   const [people, setPeople] = useState(4);
   const [age, setAge] = useState(10);
   const [recommendationOpen, setRecommendationOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [photoCaption, setPhotoCaption] = useState("");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [form] = Form.useForm<CollectionGame>();
@@ -151,6 +154,7 @@ export function BoardShelfApp() {
   function changePage(key: string) {
     if (!(key in pageMetadata)) return;
     setActiveMenu(key);
+    setMobileNavOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -278,7 +282,7 @@ export function BoardShelfApp() {
     <ConfigProvider theme={{ token: { colorPrimary: "#1677ff", borderRadius: 8, fontFamily: "var(--font-sans)" } }}>
       <App>{messageContext}
         <Layout className="app-shell">
-          <Sider width={236} breakpoint="lg" collapsedWidth={0} className="side-nav">
+          <Sider width={236} trigger={null} className="side-nav">
             <div className="brand">Board <span>Shelf</span></div>
             <Menu theme="dark" mode="inline" selectedKeys={[activeMenu]} onClick={({ key }) => changePage(key)} items={[
               { key: "dashboard", icon: <DashboardOutlined />, label: "대시보드" },
@@ -289,7 +293,7 @@ export function BoardShelfApp() {
             <div className="side-bottom">{isAdmin && <Button type="primary" block icon={<PlusOutlined />} onClick={() => changePage("registration")}>게임 추가</Button>}<Button type="text" block icon={<ShareAltOutlined />} onClick={() => void shareCollection()}>전체 컬렉션 공유</Button>{isAdmin && <Button type="text" block icon={<LogoutOutlined />} onClick={() => void logout()}>관리자 로그아웃</Button>}</div>
           </Sider>
           <Layout>
-            <Header className="top-header"><div><Typography.Title level={2}>{currentPage.title}</Typography.Title><Typography.Text type="secondary">{currentPage.description}</Typography.Text></div><Avatar style={{ background: "#e6f4ff", color: "#0958d9" }}>KJ</Avatar></Header>
+            <Header className="top-header"><div className="page-heading"><Button className="mobile-nav-trigger" type="text" icon={<MenuOutlined />} aria-label="메뉴 열기" onClick={() => setMobileNavOpen(true)} /><div><Typography.Title level={2}>{currentPage.title}</Typography.Title><Typography.Text type="secondary">{currentPage.description}</Typography.Text></div></div><Avatar style={{ background: "#e6f4ff", color: "#0958d9" }}>KJ</Avatar></Header>
             <Content id="dashboard" className="content-area">
               <Row gutter={[20, 20]}>
                 {activeMenu !== "registration" && <Col xs={24} xl={15}>
@@ -336,6 +340,15 @@ export function BoardShelfApp() {
             </Content>
           </Layout>
         </Layout>
+        <Drawer className="mobile-navigation" title={<div className="brand drawer-brand">Board <span>Shelf</span></div>} placement="left" open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} styles={{ body: { padding: 12 } }}>
+          <Menu mode="inline" selectedKeys={[activeMenu]} onClick={({ key }) => changePage(key)} items={[
+            { key: "dashboard", icon: <DashboardOutlined />, label: "대시보드" },
+            { key: "collection", icon: <BookOutlined />, label: "게임 목록" },
+            { key: "tags", icon: <TagsOutlined />, label: "태그 관리" },
+            { key: "recommend", icon: <TeamOutlined />, label: "모임 추천" },
+          ]} />
+          <div className="mobile-navigation-actions">{isAdmin && <Button type="primary" block icon={<PlusOutlined />} onClick={() => changePage("registration")}>게임 추가</Button>}<Button block icon={<ShareAltOutlined />} onClick={() => void shareCollection()}>전체 컬렉션 공유</Button>{isAdmin && <Button block icon={<LogoutOutlined />} onClick={() => void logout()}>관리자 로그아웃</Button>}</div>
+        </Drawer>
         <Modal title={`${people}명, ${age}세 이상 추천`} open={recommendationOpen} footer={null} onCancel={() => setRecommendationOpen(false)}>
           <List dataSource={recommendations} locale={{ emptyText: "조건에 맞는 게임이 없습니다." }} renderItem={(game) => <List.Item><List.Item.Meta avatar={<Cover game={game} size="small" />} title={game.title} description={`${game.minPlayers}-${game.maxPlayers}명 · ${game.minAge}세 이상 · ${game.playTime ?? "시간 미입력"}`} /><Tag color={game.bestPlayers === people ? "blue" : "default"}>{game.bestPlayers === people ? "베스트 인원" : "플레이 가능"}</Tag></List.Item>} />
         </Modal>
