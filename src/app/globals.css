@@ -30,6 +30,14 @@ body { margin: 0; color: rgba(0, 0, 0, .88); font-family: var(--font-sans); }
 .tag-game-item .cover { width: 74px; height: 102px; }
 .tag-game-item .ant-typography { width: 100%; font-size: 12px; }
 .tag-game-item .ant-rate { color: #faad14; font-size: 13px; }
+.tag-game-cover { padding: 0; border: 0; background: transparent; cursor: pointer; }
+.tag-game-cover .cover { width: 74px; height: 102px; }
+.photo-preview-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); width: 100%; gap: 3px; }
+.photo-preview-grid button, .photo-gallery-grid button { padding: 0; border: 0; background: transparent; cursor: pointer; }
+.photo-preview-grid img { width: 100%; aspect-ratio: 1; border-radius: 4px; object-fit: cover; }
+.photo-gallery-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.photo-gallery-grid img { width: 100%; aspect-ratio: 1; border-radius: 6px; object-fit: cover; }
+.photo-gallery-grid span { display: block; overflow: hidden; margin-top: 4px; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .game-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .game-item { display: flex; min-width: 0; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: inherit; font: inherit; text-align: left; }
 .game-item:disabled { cursor: default; }

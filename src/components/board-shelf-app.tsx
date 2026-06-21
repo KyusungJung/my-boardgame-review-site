@@ -78,6 +78,7 @@ export function BoardShelfApp() {
   const [people, setPeople] = useState(4);
   const [age, setAge] = useState(10);
   const [recommendationOpen, setRecommendationOpen] = useState(false);
+  const [photoGalleryGame, setPhotoGalleryGame] = useState<CollectionGame | null>(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [photoCaption, setPhotoCaption] = useState("");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -143,7 +144,7 @@ export function BoardShelfApp() {
       }
     }
     return [...gamesByTag.entries()]
-      .map(([tag, games]) => ({ tag, count: games.length, games: games.toSorted((first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime()).slice(0, 5) }))
+      .map(([tag, games]) => ({ tag, count: games.length, games: games.toSorted((first, second) => second.plays - first.plays || new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime()).slice(0, 5) }))
       .toSorted((first, second) => second.count - first.count || first.tag.localeCompare(second.tag, "ko"))
       .slice(0, 3);
   }, [collection]);
@@ -192,6 +193,11 @@ export function BoardShelfApp() {
       editGame(game);
       return;
     }
+    setViewingGame(game);
+    changePage("detail");
+  }
+
+  function viewGameDetail(game: CollectionGame) {
     setViewingGame(game);
     changePage("detail");
   }
@@ -314,7 +320,7 @@ export function BoardShelfApp() {
                       <Col xs={24} sm={8}><Statistic title="총 플레이" value={collection.reduce((sum, game) => sum + game.plays, 0)} suffix="회" /></Col>
                       <Col xs={24} sm={8}><Statistic title="태그" value={collectionTags.length} suffix="개" /></Col>
                     </Row>
-                  </Card>{popularTagGroups.length ? <div className="tag-dashboard">{popularTagGroups.map(({ tag, count, games }) => <Card className="section-card tag-game-card" key={tag} title={<Space size={8}><Tag color="blue">{tag}</Tag><Typography.Text type="secondary">{count}개 게임</Typography.Text></Space>}><div className="tag-game-row">{games.map((game) => <article className="tag-game-item editable" key={game.id} role="button" tabIndex={0} onClick={() => openGame(game)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openGame(game); } }}><Cover game={game} /><Typography.Text strong ellipsis>{game.title}</Typography.Text><Space size={3}><Rate disabled allowHalf value={game.personalRating ?? 0} /><Typography.Text type="secondary">{game.personalRating?.toFixed(1) ?? "-"}</Typography.Text></Space></article>)}</div></Card>)}</div> : <Card className="section-card" title="시작하기"><Typography.Paragraph type="secondary">관리자 로그인 후 첫 보드게임을 등록하면 태그별 게임 목록이 표시됩니다.</Typography.Paragraph></Card>}</div>
+                  </Card>{popularTagGroups.length ? <div className="tag-dashboard">{popularTagGroups.map(({ tag, count, games }) => <Card className="section-card tag-game-card" key={tag} title={<Space size={8}><Tag color="blue">{tag}</Tag><Typography.Text type="secondary">{count}개 게임 · 플레이 많은 순</Typography.Text></Space>}><div className="tag-game-row">{games.map((game) => <article className="tag-game-item" key={game.id}><button className="tag-game-cover" type="button" onClick={() => viewGameDetail(game)}><Cover game={game} /></button><Typography.Text strong ellipsis>{game.title}</Typography.Text><Typography.Text type="secondary">플레이 {game.plays}회</Typography.Text><Space size={3}><Rate disabled allowHalf value={game.personalRating ?? 0} /><Typography.Text type="secondary">{game.personalRating?.toFixed(1) ?? "-"}</Typography.Text></Space>{game.photos.length > 0 && <><div className="photo-preview-grid">{game.photos.slice(0, 5).map((photo) => <button type="button" key={photo.id} onClick={() => viewGameDetail(game)}><img src={photo.url} alt={photo.caption || `${game.title} 플레이 사진`} /></button>)}</div>{game.photos.length > 5 && <Button type="link" size="small" onClick={() => setPhotoGalleryGame(game)}>더보기</Button>}</>}</article>)}</div></Card>)}</div> : <Card className="section-card" title="시작하기"><Typography.Paragraph type="secondary">관리자 로그인 후 첫 보드게임을 등록하면 태그별 게임 목록이 표시됩니다.</Typography.Paragraph></Card>}</div>
                   <div hidden={activeMenu !== "detail"}><Card className="section-card" title={viewingGame?.title ?? "게임 상세"}>{viewingGame ? <><div className="selected-game"><Cover game={viewingGame} /><div><Typography.Title level={4}>{viewingGame.title}</Typography.Title><Typography.Text type="secondary">{viewingGame.englishTitle} {viewingGame.year ? `(${viewingGame.year})` : ""}</Typography.Text><br /><Rate disabled allowHalf value={viewingGame.personalRating ?? 0} /><Typography.Text> {viewingGame.personalRating?.toFixed(1) ?? "평가 없음"}</Typography.Text></div></div><Space wrap>{viewingGame.tags.map((tag) => <Tag key={tag}>{tag}</Tag>)}</Space><Typography.Paragraph>{viewingGame.review || "등록된 한줄 리뷰가 없습니다."}</Typography.Paragraph><Typography.Text type="secondary">{viewingGame.minPlayers}-{viewingGame.maxPlayers}명 · {viewingGame.minAge}세 이상 · {viewingGame.playTime ?? "시간 미입력"} · 플레이 {viewingGame.plays}회</Typography.Text><div className="play-photo-grid">{viewingGame.photos.map((photo) => <figure key={photo.id}><img src={photo.url} alt={photo.caption || `${viewingGame.title} 플레이 사진`} /><figcaption>{photo.caption || "플레이 기록"}</figcaption></figure>)}</div></> : <Empty description="게임을 찾지 못했습니다." />}</Card></div>
                   <div hidden={activeMenu !== "collection"}><Card id="collection" className="section-card collection-card" title="내 보유 게임" extra={<Typography.Text type="secondary">{isAdmin ? "게임을 클릭해 수정" : "게임을 클릭해 상세 보기"}</Typography.Text>}>
                     <div className="game-grid">
@@ -364,6 +370,7 @@ export function BoardShelfApp() {
         <Modal title={`${people}명, ${age}세 이상 추천`} open={recommendationOpen} footer={null} onCancel={() => setRecommendationOpen(false)}>
           <List dataSource={recommendations} locale={{ emptyText: "조건에 맞는 게임이 없습니다." }} renderItem={(game) => <List.Item><List.Item.Meta avatar={<Cover game={game} size="small" />} title={game.title} description={`${game.minPlayers}-${game.maxPlayers}명 · ${game.minAge}세 이상 · ${game.playTime ?? "시간 미입력"}`} /><Tag color={game.bestPlayers === people ? "blue" : "default"}>{game.bestPlayers === people ? "베스트 인원" : "플레이 가능"}</Tag></List.Item>} />
         </Modal>
+        <Modal title={photoGalleryGame ? `${photoGalleryGame.title} · 플레이 사진` : "플레이 사진"} open={Boolean(photoGalleryGame)} footer={null} onCancel={() => setPhotoGalleryGame(null)}><div className="photo-gallery-grid">{photoGalleryGame?.photos.map((photo) => <button type="button" key={photo.id} onClick={() => viewGameDetail(photoGalleryGame)}><img src={photo.url} alt={photo.caption || `${photoGalleryGame.title} 플레이 사진`} /><span>{photo.caption || "플레이 기록"}</span></button>)}</div></Modal>
       </App>
     </ConfigProvider>
   );
