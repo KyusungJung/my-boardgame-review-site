@@ -1,4 +1,4 @@
-import { del, put } from "@vercel/blob";
+import { del } from "@vercel/blob";
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
@@ -9,13 +9,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const game = await prisma.game.findUnique({ where: { boardlifeId: id } });
   if (!game) return NextResponse.json({ message: "등록된 게임을 찾지 못했습니다." }, { status: 404 });
 
-  const formData = await request.formData();
-  const file = formData.get("file");
-  const caption = String(formData.get("caption") ?? "").trim();
-  if (!(file instanceof File) || !file.type.startsWith("image/") || file.size > 5 * 1024 * 1024) return NextResponse.json({ message: "5MB 이하의 이미지 파일만 업로드할 수 있습니다." }, { status: 400 });
-
-  const blob = await put(`game-photos/${id}/${file.name}`, file, { access: "public", addRandomSuffix: true });
-  const photo = await prisma.gamePhoto.create({ data: { gameId: game.id, url: blob.url, pathname: blob.pathname, caption: caption || null } });
+  const { url, pathname, caption } = await request.json() as { url?: string; pathname?: string; caption?: string };
+  if (!url || !pathname || !pathname.startsWith(`game-photos/${id}/`)) return NextResponse.json({ message: "올바른 사진 정보가 아닙니다." }, { status: 400 });
+  const photo = await prisma.gamePhoto.create({ data: { gameId: game.id, url, pathname, caption: caption?.trim() || null } });
   return NextResponse.json({ id: photo.id, url: photo.url, caption: photo.caption ?? undefined, createdAt: photo.createdAt.toISOString() });
 }
 
