@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum GameStatus {
+  OWNED
+  WISHLIST
+  PLAYED
+}
+
+model Game {
+  id                  String      @id @default(cuid())
+  boardlifeId         String      @unique
+  title               String
+  englishTitle        String      @default("")
+  year                Int?
+  image               String?
+  sourceUrl           String
+  minPlayers          Int?
+  maxPlayers          Int?
+  bestPlayers         Int?
+  recommendedPlayers  String?
+  minAge              Int?
+  playTime            String?
+  complexity          Float?
+  boardlifeRating     Float?
+  languageDependency  String?
+  sourceFetchedAt     DateTime?
+  personalRating      Float?
+  review              String?
+  plays               Int         @default(0)
+  status              GameStatus  @default(OWNED)
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  tags                GameTag[]
+
+  @@index([createdAt])
+}
+
+model Tag {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  createdAt DateTime  @default(now())
+  games     GameTag[]
+}
+
+model GameTag {
+  gameId String
+  tagId  String
+  game   Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  tag    Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([gameId, tagId])
+  @@index([tagId])
+}

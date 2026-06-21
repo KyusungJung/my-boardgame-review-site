@@ -4,22 +4,31 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "tsc --noEmit"
+    "lint": "prisma generate && tsc --noEmit",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@ant-design/icons": "^5.6.1",
+    "@prisma/adapter-pg": "^7.0.0",
+    "@prisma/client": "^7.0.0",
     "antd": "^5.26.7",
     "cheerio": "^1.1.2",
     "next": "^15.4.6",
     "react": "^19.1.1",
+    "pg": "^8.16.3",
     "react-dom": "^19.1.1"
   },
   "devDependencies": {
     "@types/node": "^24.1.0",
+    "@types/pg": "^8.15.5",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
+    "dotenv": "^17.2.1",
+    "prisma": "^7.0.0",
     "typescript": "^5.8.3"
   }
 }

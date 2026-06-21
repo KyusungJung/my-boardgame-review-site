@@ -28,6 +28,8 @@ import {
 import {
   BookOutlined,
   DashboardOutlined,
+  LockOutlined,
+  LogoutOutlined,
   PlusOutlined,
   SearchOutlined,
   ShareAltOutlined,
@@ -39,8 +41,6 @@ import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "r
 import type { BoardGameMetadata, BoardlifeSearchResult, CollectionGame } from "@/lib/types";
 
 const { Header, Sider, Content } = Layout;
-const STORAGE_KEY = "board-shelf.collection.v1";
-
 const seededCollection: CollectionGame[] = [
   { id: "3516", title: "스플렌더", englishTitle: "Splendor", year: 2014, sourceUrl: "https://boardlife.co.kr/game/3516", minPlayers: 2, maxPlayers: 4, bestPlayers: 3, minAge: 10, playTime: "30분", complexity: 1.8, boardlifeRating: 7.4, sourceFetchedAt: "", tags: ["세트 컬렉션", "엔진 빌딩", "입문"], personalRating: 4.5, plays: 15, status: "owned", createdAt: "2026-06-21" },
   { id: "azul", title: "아줄", englishTitle: "Azul", year: 2017, sourceUrl: "", minPlayers: 2, maxPlayers: 4, bestPlayers: 3, minAge: 8, playTime: "30-45분", complexity: 1.8, sourceFetchedAt: "", tags: ["추상 전략", "타일 배치", "가족"], personalRating: 4.5, plays: 10, status: "owned", createdAt: "2026-06-20" },
@@ -54,16 +54,6 @@ function Cover({ game, size = "regular" }: { game: Pick<BoardlifeSearchResult, "
   return imageUrl ? <img className={`cover ${size}`} src={imageUrl} alt={`${game.title} 표지`} /> : <div className={`cover ${size} cover-fallback`} aria-label={`${game.title} 표지 없음`}>{game.title.slice(0, 2)}</div>;
 }
 
-function loadCollection() {
-  if (typeof window === "undefined") return seededCollection;
-  try {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    return saved ? (JSON.parse(saved) as CollectionGame[]) : seededCollection;
-  } catch {
-    return seededCollection;
-  }
-}
-
 export function BoardShelfApp() {
   const [collection, setCollection] = useState<CollectionGame[]>(seededCollection);
   const [query, setQuery] = useState("");
@@ -72,6 +62,10 @@ export function BoardShelfApp() {
   const [selected, setSelected] = useState<BoardGameMetadata | null>(null);
   const [searching, setSearching] = useState(false);
   const [loadingDetail, startDetailTransition] = useTransition();
+  const [saving, setSaving] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loggingIn, setLoggingIn] = useState(false);
   const [people, setPeople] = useState(4);
   const [age, setAge] = useState(10);
   const [recommendationOpen, setRecommendationOpen] = useState(false);
@@ -79,12 +73,13 @@ export function BoardShelfApp() {
   const [messageApi, messageContext] = message.useMessage();
 
   useEffect(() => {
-    setCollection(loadCollection());
+    async function loadDashboardData() {
+      const [gamesResponse, sessionResponse] = await Promise.all([fetch("/api/games"), fetch("/api/auth/session")]);
+      if (gamesResponse.ok) setCollection(await gamesResponse.json() as CollectionGame[]);
+      if (sessionResponse.ok) setIsAdmin((await sessionResponse.json() as { authenticated: boolean }).authenticated);
+    }
+    void loadDashboardData();
   }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(collection));
-  }, [collection]);
 
   useEffect(() => {
     if (deferredQuery.trim().length < 2) {
@@ -141,13 +136,46 @@ export function BoardShelfApp() {
     });
   }
 
-  function saveGame(values: CollectionGame) {
+  async function saveGame(values: CollectionGame) {
     if (!selected) return;
     const game: CollectionGame = { ...selected, ...values, id: selected.id, title: values.title || selected.title, sourceUrl: selected.sourceUrl, sourceFetchedAt: selected.sourceFetchedAt, createdAt: new Date().toISOString() };
-    setCollection((current) => [game, ...current.filter((item) => item.id !== game.id)]);
-    messageApi.success(`${game.title}을(를) 컬렉션에 저장했습니다.`);
+    setSaving(true);
+    try {
+      const response = await fetch("/api/games", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(game) });
+      const savedGame = await response.json() as CollectionGame | { message: string };
+      if (!response.ok) throw new Error("message" in savedGame ? savedGame.message : "저장에 실패했습니다.");
+      const persistedGame = savedGame as CollectionGame;
+      setCollection((current) => [persistedGame, ...current.filter((item) => item.id !== persistedGame.id)]);
+      messageApi.success(`${persistedGame.title}을(를) Neon DB에 저장했습니다.`);
+      setSelected(null);
+      setQuery("");
+      form.resetFields();
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : "게임을 저장하지 못했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function login() {
+    setLoggingIn(true);
+    try {
+      const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: loginPassword }) });
+      if (!response.ok) throw new Error("관리자 비밀번호가 올바르지 않습니다.");
+      setIsAdmin(true);
+      setLoginPassword("");
+      messageApi.success("관리자 모드로 전환했습니다.");
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : "로그인에 실패했습니다.");
+    } finally {
+      setLoggingIn(false);
+    }
+  }
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    setIsAdmin(false);
     setSelected(null);
-    setQuery("");
     form.resetFields();
   }
 
@@ -163,7 +191,7 @@ export function BoardShelfApp() {
               { key: "tags", icon: <TagsOutlined />, label: "태그 관리" },
               { key: "recommend", icon: <TeamOutlined />, label: "모임 추천" },
             ]} />
-            <div className="side-bottom"><Button type="primary" block icon={<PlusOutlined />} onClick={() => document.getElementById("registration")?.scrollIntoView({ behavior: "smooth" })}>게임 추가</Button><Button type="text" block icon={<ShareAltOutlined />}>전체 컬렉션 공유</Button></div>
+            <div className="side-bottom">{isAdmin && <Button type="primary" block icon={<PlusOutlined />} onClick={() => document.getElementById("registration")?.scrollIntoView({ behavior: "smooth" })}>게임 추가</Button>}<Button type="text" block icon={<ShareAltOutlined />}>전체 컬렉션 공유</Button>{isAdmin && <Button type="text" block icon={<LogoutOutlined />} onClick={() => void logout()}>관리자 로그아웃</Button>}</div>
           </Sider>
           <Layout>
             <Header className="top-header"><div><Typography.Title level={2}>대시보드</Typography.Title><Typography.Text type="secondary">내 보드게임 컬렉션을 한눈에 관리하세요.</Typography.Text></div><Avatar style={{ background: "#e6f4ff", color: "#0958d9" }}>KJ</Avatar></Header>
@@ -191,7 +219,7 @@ export function BoardShelfApp() {
                   </Card>
                 </Col>
                 <Col xs={24} xl={9}>
-                  <Card id="registration" className="registration-card" title="게임 등록" extra={<Tag color="blue">Boardlife</Tag>}>
+                  {isAdmin ? <Card id="registration" className="registration-card" title="게임 등록" extra={<Tag color="blue">Boardlife</Tag>}>
                     <Typography.Paragraph type="secondary">게임명을 검색해 후보를 고른 뒤, 자동으로 채워진 정보를 확인하세요.</Typography.Paragraph>
                     <Input value={query} prefix={<SearchOutlined />} placeholder="예: 스플랜더, Splendor" onChange={(event) => setQuery(event.target.value)} suffix={searching ? "검색 중" : null} />
                     {(candidates.length > 0 || searching) && <List className="search-results" loading={searching} dataSource={candidates} renderItem={(candidate) => <List.Item onClick={() => chooseCandidate(candidate)}><List.Item.Meta avatar={<Cover game={candidate} size="small" />} title={candidate.title} description={`${candidate.englishTitle || "영문명 없음"} · ${candidate.year ?? "연도 미상"}`} /></List.Item>} />}
@@ -204,9 +232,9 @@ export function BoardShelfApp() {
                       <Form.Item name="personalRating" label="나의 평점"><Rate allowHalf /></Form.Item>
                       <Form.Item name="review" label="한줄 리뷰"><Input.TextArea rows={2} placeholder="내가 느낀 재미와 추천 이유를 남겨보세요." /></Form.Item>
                       <Form.Item name="plays" label="플레이 횟수"><InputNumber min={0} className="full-width" /></Form.Item>
-                      <Space className="form-actions"><Button onClick={() => { setSelected(null); form.resetFields(); }}>취소</Button><Button type="primary" htmlType="submit" loading={loadingDetail}>컬렉션에 저장</Button></Space>
+                      <Space className="form-actions"><Button onClick={() => { setSelected(null); form.resetFields(); }}>취소</Button><Button type="primary" htmlType="submit" loading={loadingDetail || saving}>컬렉션에 저장</Button></Space>
                     </Form> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={loadingDetail ? "게임 정보를 불러오는 중…" : "검색 결과에서 게임을 선택하세요."} />}
-                  </Card>
+                  </Card> : <Card id="registration" className="registration-card" title="관리자 로그인" extra={<LockOutlined />}><Typography.Paragraph type="secondary">컬렉션은 누구나 볼 수 있지만, 등록과 수정은 관리자만 할 수 있습니다.</Typography.Paragraph><Input.Password value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} onPressEnter={() => void login()} placeholder="관리자 비밀번호" /><Button type="primary" block loading={loggingIn} onClick={() => void login()} style={{ marginTop: 12 }}>관리자 로그인</Button></Card>}
                 </Col>
               </Row>
             </Content>
