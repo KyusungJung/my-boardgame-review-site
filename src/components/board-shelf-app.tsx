@@ -41,13 +41,13 @@ import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "r
 import type { BoardGameMetadata, BoardlifeSearchResult, CollectionGame } from "@/lib/types";
 
 const { Header, Sider, Content } = Layout;
-const seededCollection: CollectionGame[] = [
-  { id: "3516", title: "스플렌더", englishTitle: "Splendor", year: 2014, sourceUrl: "https://boardlife.co.kr/game/3516", minPlayers: 2, maxPlayers: 4, bestPlayers: 3, minAge: 10, playTime: "30분", complexity: 1.8, boardlifeRating: 7.4, sourceFetchedAt: "", tags: ["세트 컬렉션", "엔진 빌딩", "입문"], personalRating: 4.5, plays: 15, status: "owned", createdAt: "2026-06-21" },
-  { id: "azul", title: "아줄", englishTitle: "Azul", year: 2017, sourceUrl: "", minPlayers: 2, maxPlayers: 4, bestPlayers: 3, minAge: 8, playTime: "30-45분", complexity: 1.8, sourceFetchedAt: "", tags: ["추상 전략", "타일 배치", "가족"], personalRating: 4.5, plays: 10, status: "owned", createdAt: "2026-06-20" },
-  { id: "ticket", title: "티켓 투 라이드", englishTitle: "Ticket to Ride", year: 2004, sourceUrl: "", minPlayers: 2, maxPlayers: 5, bestPlayers: 4, minAge: 8, playTime: "45-60분", complexity: 1.8, sourceFetchedAt: "", tags: ["가족", "루트 빌딩", "초보 환영"], personalRating: 4, plays: 13, status: "owned", createdAt: "2026-06-20" },
-  { id: "wingspan", title: "윙스팬", englishTitle: "Wingspan", year: 2019, sourceUrl: "", minPlayers: 1, maxPlayers: 5, bestPlayers: 3, minAge: 10, playTime: "40-70분", complexity: 2.4, sourceFetchedAt: "", tags: ["엔진 빌딩", "새", "전략"], personalRating: 4.5, plays: 9, status: "owned", createdAt: "2026-06-19" },
-  { id: "catan", title: "카탄", englishTitle: "Catan", year: 1995, sourceUrl: "", minPlayers: 3, maxPlayers: 4, bestPlayers: 4, minAge: 10, playTime: "60-90분", complexity: 2.3, sourceFetchedAt: "", tags: ["협상", "가족", "모임"], personalRating: 4, plays: 12, status: "owned", createdAt: "2026-06-18" },
-];
+const sectionTargets: Record<string, string> = {
+  dashboard: "dashboard",
+  collection: "collection",
+  tags: "tags",
+  recommend: "recommend",
+  registration: "registration",
+};
 
 function Cover({ game, size = "regular" }: { game: Pick<BoardlifeSearchResult, "title" | "image" | "thumbnail">; size?: "small" | "regular" }) {
   const imageUrl = game.image || game.thumbnail;
@@ -55,7 +55,7 @@ function Cover({ game, size = "regular" }: { game: Pick<BoardlifeSearchResult, "
 }
 
 export function BoardShelfApp() {
-  const [collection, setCollection] = useState<CollectionGame[]>(seededCollection);
+  const [collection, setCollection] = useState<CollectionGame[]>([]);
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const [candidates, setCandidates] = useState<BoardlifeSearchResult[]>([]);
@@ -66,6 +66,7 @@ export function BoardShelfApp() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loginPassword, setLoginPassword] = useState("");
   const [loggingIn, setLoggingIn] = useState(false);
+  const [activeMenu, setActiveMenu] = useState("dashboard");
   const [people, setPeople] = useState(4);
   const [age, setAge] = useState(10);
   const [recommendationOpen, setRecommendationOpen] = useState(false);
@@ -76,6 +77,7 @@ export function BoardShelfApp() {
     async function loadDashboardData() {
       const [gamesResponse, sessionResponse] = await Promise.all([fetch("/api/games"), fetch("/api/auth/session")]);
       if (gamesResponse.ok) setCollection(await gamesResponse.json() as CollectionGame[]);
+      else setCollection([]);
       if (sessionResponse.ok) setIsAdmin((await sessionResponse.json() as { authenticated: boolean }).authenticated);
     }
     void loadDashboardData();
@@ -115,6 +117,13 @@ export function BoardShelfApp() {
     }), [age, collection, people]);
 
   const collectionTags = useMemo(() => [...new Set(collection.flatMap((game) => game.tags))].toSorted(), [collection]);
+
+  function navigateToSection(key: string) {
+    const targetId = sectionTargets[key];
+    if (!targetId) return;
+    setActiveMenu(key === "registration" ? activeMenu : key);
+    document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   function chooseCandidate(candidate: BoardlifeSearchResult) {
     setQuery(candidate.title);
@@ -185,17 +194,17 @@ export function BoardShelfApp() {
         <Layout className="app-shell">
           <Sider width={236} breakpoint="lg" collapsedWidth={0} className="side-nav">
             <div className="brand">Board <span>Shelf</span></div>
-            <Menu theme="dark" mode="inline" selectedKeys={["dashboard"]} items={[
+            <Menu theme="dark" mode="inline" selectedKeys={[activeMenu]} onClick={({ key }) => navigateToSection(key)} items={[
               { key: "dashboard", icon: <DashboardOutlined />, label: "대시보드" },
               { key: "collection", icon: <BookOutlined />, label: "게임 목록" },
               { key: "tags", icon: <TagsOutlined />, label: "태그 관리" },
               { key: "recommend", icon: <TeamOutlined />, label: "모임 추천" },
             ]} />
-            <div className="side-bottom">{isAdmin && <Button type="primary" block icon={<PlusOutlined />} onClick={() => document.getElementById("registration")?.scrollIntoView({ behavior: "smooth" })}>게임 추가</Button>}<Button type="text" block icon={<ShareAltOutlined />}>전체 컬렉션 공유</Button>{isAdmin && <Button type="text" block icon={<LogoutOutlined />} onClick={() => void logout()}>관리자 로그아웃</Button>}</div>
+            <div className="side-bottom">{isAdmin && <Button type="primary" block icon={<PlusOutlined />} onClick={() => navigateToSection("registration")}>게임 추가</Button>}<Button type="text" block icon={<ShareAltOutlined />}>전체 컬렉션 공유</Button>{isAdmin && <Button type="text" block icon={<LogoutOutlined />} onClick={() => void logout()}>관리자 로그아웃</Button>}</div>
           </Sider>
           <Layout>
             <Header className="top-header"><div><Typography.Title level={2}>대시보드</Typography.Title><Typography.Text type="secondary">내 보드게임 컬렉션을 한눈에 관리하세요.</Typography.Text></div><Avatar style={{ background: "#e6f4ff", color: "#0958d9" }}>KJ</Avatar></Header>
-            <Content className="content-area">
+            <Content id="dashboard" className="content-area">
               <Row gutter={[20, 20]}>
                 <Col xs={24} xl={15}>
                   <Card className="section-card" title="컬렉션 요약">
@@ -206,14 +215,15 @@ export function BoardShelfApp() {
                       <Col xs={12} sm={6}><Statistic title="평균 평점" value={collection.length ? collection.reduce((sum, game) => sum + (game.personalRating ?? 0), 0) / collection.length : 0} precision={1} prefix={<StarFilled className="star" />} suffix="/ 5" /></Col>
                     </Row>
                   </Card>
-                  <Card className="section-card collection-card" title="내 보유 게임" extra={<Typography.Text type="secondary">최근 추가순</Typography.Text>}>
+                  <Card id="collection" className="section-card collection-card" title="내 보유 게임" extra={<Typography.Text type="secondary">최근 추가순</Typography.Text>}>
                     <div className="game-grid">
                       {collection.map((game) => <article className="game-item" key={game.id}><Cover game={game} /><div className="game-info"><Typography.Text strong ellipsis>{game.title}</Typography.Text><Typography.Text type="secondary" className="english" ellipsis>{game.englishTitle}</Typography.Text><Space size={4}><Rate disabled allowHalf value={game.personalRating} count={1} /><Typography.Text>{game.personalRating?.toFixed(1) ?? "-"}</Typography.Text></Space><div className="game-tags">{game.tags.slice(0, 2).map((tag) => <Tag key={tag}>{tag}</Tag>)}</div><Typography.Text type="secondary">플레이 {game.plays}회</Typography.Text></div></article>)}
                     </div>
+                    {!collection.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="아직 등록한 보드게임이 없습니다." />}
                     <Divider orientation="left" plain>내 태그</Divider>
-                    <div className="tag-library">{collectionTags.map((tag) => <Tag color="blue" key={tag}>{tag}</Tag>)}{!collectionTags.length && <Typography.Text type="secondary">등록된 태그가 없습니다.</Typography.Text>}</div>
+                    <div id="tags" className="tag-library">{collectionTags.map((tag) => <Tag color="blue" key={tag}>{tag}</Tag>)}{!collectionTags.length && <Typography.Text type="secondary">등록된 태그가 없습니다.</Typography.Text>}</div>
                   </Card>
-                  <Card className="recommendation-card" title={`오늘의 추천 · ${people}명, ${age}세 이상`} extra={<Button type="link" onClick={() => setRecommendationOpen(true)}>자세히 보기</Button>}>
+                  <Card id="recommend" className="recommendation-card" title={`오늘의 추천 · ${people}명, ${age}세 이상`} extra={<Button type="link" onClick={() => setRecommendationOpen(true)}>자세히 보기</Button>}>
                     <div className="recommendation-controls"><span>참가 인원</span><InputNumber min={1} max={12} value={people} onChange={(value) => setPeople(value ?? 1)} /><span>최연소 연령</span><InputNumber min={0} max={99} value={age} onChange={(value) => setAge(value ?? 0)} /></div>
                     <div className="recommendation-list">{recommendations.slice(0, 3).map((game) => <div className="recommendation-item" key={game.id}><Cover game={game} size="small" /><div><Typography.Text strong>{game.title}</Typography.Text><Typography.Paragraph type="secondary">{game.bestPlayers === people ? `${people}명일 때 가장 좋아요` : `${game.minPlayers}-${game.maxPlayers}명 플레이 가능`} · {game.playTime ?? "시간 미입력"}</Typography.Paragraph></div></div>)}{!recommendations.length && <Empty description="조건에 맞는 게임이 없어요." image={Empty.PRESENTED_IMAGE_SIMPLE} />}</div>
                   </Card>
