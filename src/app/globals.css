@@ -1,0 +1,53 @@
+@import "antd/dist/reset.css";
+
+:root { --navy: #001529; --canvas: #f5f7fa; --line: #edf0f3; --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif; }
+* { box-sizing: border-box; }
+html { background: var(--canvas); }
+body { margin: 0; color: rgba(0, 0, 0, .88); font-family: var(--font-sans); }
+.app-shell { min-height: 100vh; background: var(--canvas); }
+.side-nav { position: sticky !important; top: 0; height: 100vh; background: var(--navy) !important; padding: 24px 12px; }
+.brand { padding: 4px 12px 28px; color: #fff; font-size: 22px; font-weight: 750; letter-spacing: -1px; }
+.brand span { color: #69b1ff; }
+.side-nav .ant-menu { border-inline-end: 0 !important; background: transparent !important; }
+.side-nav .ant-menu-item { margin-block: 6px !important; width: 100% !important; }
+.side-bottom { position: absolute; right: 12px; bottom: 22px; left: 12px; display: grid; gap: 8px; }
+.side-bottom .ant-btn-text { color: rgba(255,255,255,.78); text-align: left; }
+.top-header { display: flex; height: auto; min-height: 100px; align-items: center; justify-content: space-between; padding: 20px 34px; line-height: normal; background: #fff; border-bottom: 1px solid var(--line); }
+.top-header .ant-typography { margin: 0; }
+.top-header .ant-typography.ant-typography-h2 { margin-bottom: 5px; font-size: 28px; letter-spacing: -.7px; }
+.content-area { padding: 24px 34px 46px; }
+.section-card, .registration-card, .recommendation-card { border-color: var(--line); box-shadow: 0 2px 8px rgba(0, 21, 41, .025); }
+.section-card { margin-bottom: 20px; }
+.collection-card .ant-card-body { padding-top: 18px; }
+.star { color: #faad14; font-size: 18px; }
+.game-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.game-item { display: flex; min-width: 0; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.game-info { display: grid; min-width: 0; align-content: start; gap: 4px; font-size: 12px; }
+.game-info .ant-rate { font-size: 13px; color: #faad14; }
+.english { font-size: 12px; }
+.game-tags { display: flex; min-width: 0; gap: 3px; overflow: hidden; }
+.game-tags .ant-tag { max-width: 82px; margin-inline-end: 0; overflow: hidden; font-size: 10px; line-height: 17px; text-overflow: ellipsis; white-space: nowrap; }
+.tag-library { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag-library .ant-tag { margin: 0; }
+.cover { display: block; flex: none; width: 62px; height: 86px; border-radius: 5px; object-fit: cover; background: #dceeff; box-shadow: 0 2px 5px rgba(0,0,0,.12); }
+.cover.small { width: 38px; height: 52px; }
+.cover-fallback { display: grid; place-items: center; color: #0958d9; font-size: 13px; font-weight: 700; text-align: center; }
+.recommendation-card { border-color: #b7d5ff; background: linear-gradient(135deg, #fff 0%, #f5faff 100%); }
+.recommendation-controls { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; color: rgba(0,0,0,.65); font-size: 13px; }
+.recommendation-controls .ant-input-number { width: 68px; }
+.recommendation-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.recommendation-item { display: flex; min-width: 0; gap: 10px; padding: 10px; border: 1px solid #e7f1ff; border-radius: 7px; background: #fff; }
+.recommendation-item > div { min-width: 0; }
+.recommendation-item .ant-typography { margin: 0; }
+.recommendation-item .ant-typography-paragraph { margin-top: 3px; margin-bottom: 0; font-size: 12px; line-height: 1.45; }
+.registration-card { position: sticky; top: 20px; }
+.search-results { max-height: 250px; margin-top: 8px; overflow: auto; border: 1px solid var(--line); border-radius: 7px; }
+.search-results .ant-list-item { padding: 9px 12px; cursor: pointer; }
+.search-results .ant-list-item:hover { background: #f5faff; }
+.search-results .ant-list-item-meta { align-items: center; }
+.selected-game { display: flex; gap: 12px; margin-bottom: 16px; padding: 12px; border-radius: 8px; background: #f7fbff; }
+.selected-game .ant-typography { margin: 0; }
+.full-width { width: 100%; }
+.form-actions { display: flex; justify-content: flex-end; width: 100%; }
+@media (max-width: 1199px) { .registration-card { position: static; } }
+@media (max-width: 768px) { .top-header { min-height: 82px; padding: 17px 18px; }.content-area { padding: 18px; }.game-grid, .recommendation-list { grid-template-columns: 1fr; }.recommendation-controls { flex-wrap: wrap; }.side-bottom { display: none; } }
