@@ -29,4 +29,7 @@ export type CollectionGame = BoardGameMetadata & {
   plays: number;
   status: "owned" | "wishlist" | "played";
   createdAt: string;
+  photos: PlayPhoto[];
 };
+
+export type PlayPhoto = { id: string; url: string; caption?: string; createdAt: string };

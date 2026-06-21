@@ -38,8 +38,21 @@ model Game {
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
   tags                GameTag[]
+  photos              GamePhoto[]
 
   @@index([createdAt])
+}
+
+model GamePhoto {
+  id        String   @id @default(cuid())
+  url       String
+  pathname  String   @unique
+  caption   String?
+  createdAt DateTime @default(now())
+  gameId    String
+  game      Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@index([gameId, createdAt])
 }
 
 model Tag {

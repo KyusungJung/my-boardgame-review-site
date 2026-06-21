@@ -1,7 +1,7 @@
-import { GameStatus, type Game, type GameTag, type Tag } from "@/generated/prisma/client";
+import { GameStatus, type Game, type GamePhoto, type GameTag, type Tag } from "@/generated/prisma/client";
 import type { CollectionGame } from "@/lib/types";
 
-type GameWithTags = Game & { tags: Array<GameTag & { tag: Tag }> };
+type GameWithTags = Game & { tags: Array<GameTag & { tag: Tag }>; photos: GamePhoto[] };
 
 export function serializeGame(game: GameWithTags): CollectionGame {
   return {
@@ -28,6 +28,7 @@ export function serializeGame(game: GameWithTags): CollectionGame {
     plays: game.plays,
     status: game.status.toLowerCase() as CollectionGame["status"],
     createdAt: game.createdAt.toISOString(),
+    photos: game.photos.map((photo) => ({ id: photo.id, url: photo.url, caption: photo.caption ?? undefined, createdAt: photo.createdAt.toISOString() })),
   };
 }
 

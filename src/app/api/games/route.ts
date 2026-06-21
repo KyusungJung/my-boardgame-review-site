@@ -4,7 +4,7 @@ import { gameDataFromInput, serializeGame } from "@/lib/game-records";
 import { prisma } from "@/lib/prisma";
 import type { CollectionGame } from "@/lib/types";
 
-const includeTags = { tags: { include: { tag: true } } } as const;
+const includeTags = { tags: { include: { tag: true } }, photos: { orderBy: { createdAt: "desc" } } } as const;
 
 function saveErrorResponse(error: unknown) {
   console.error("Failed to save board game", error);

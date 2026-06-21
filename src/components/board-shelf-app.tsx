@@ -71,6 +71,8 @@ export function BoardShelfApp() {
   const [people, setPeople] = useState(4);
   const [age, setAge] = useState(10);
   const [recommendationOpen, setRecommendationOpen] = useState(false);
+  const [photoCaption, setPhotoCaption] = useState("");
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [form] = Form.useForm<CollectionGame>();
   const [messageApi, messageContext] = message.useMessage();
 
@@ -174,6 +176,41 @@ export function BoardShelfApp() {
     setQuery("");
     form.setFieldsValue({ ...game, status: game.status ?? "owned" });
     changePage("registration");
+  }
+
+  async function uploadPlayPhoto(file?: File) {
+    if (!file || !selected || !isEditingSelected) return;
+    setUploadingPhoto(true);
+    try {
+      const formData = new FormData();
+      formData.set("file", file);
+      formData.set("caption", photoCaption);
+      const response = await fetch(`/api/games/${selected.id}/photos`, { method: "POST", body: formData });
+      const photo = await response.json();
+      if (!response.ok) throw new Error(photo.message ?? "사진을 업로드하지 못했습니다.");
+      const updated = { ...(selected as CollectionGame), photos: [photo, ...(selected as CollectionGame).photos] };
+      setSelected(updated);
+      setCollection((current) => current.map((game) => game.id === updated.id ? updated : game));
+      setPhotoCaption("");
+      messageApi.success("플레이 사진을 추가했습니다.");
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : "사진을 업로드하지 못했습니다.");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
+
+  async function deletePlayPhoto(photoId: string) {
+    if (!selected) return;
+    try {
+      const response = await fetch(`/api/games/${selected.id}/photos?photoId=${encodeURIComponent(photoId)}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("사진을 삭제하지 못했습니다.");
+      const updated = { ...(selected as CollectionGame), photos: (selected as CollectionGame).photos.filter((photo) => photo.id !== photoId) };
+      setSelected(updated);
+      setCollection((current) => current.map((game) => game.id === updated.id ? updated : game));
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : "사진을 삭제하지 못했습니다.");
+    }
   }
 
   async function saveGame(values: CollectionGame) {
@@ -288,6 +325,7 @@ export function BoardShelfApp() {
                       <Form.Item name="personalRating" label="나의 평점"><Rate allowHalf /></Form.Item>
                       <Form.Item name="review" label="한줄 리뷰"><Input.TextArea rows={2} placeholder="내가 느낀 재미와 추천 이유를 남겨보세요." /></Form.Item>
                       <Form.Item name="plays" label="플레이 횟수"><InputNumber min={0} className="full-width" /></Form.Item>
+                      {isEditingSelected && <div className="play-photo-section"><Typography.Text strong>플레이 사진</Typography.Text><Space.Compact block><Input value={photoCaption} onChange={(event) => setPhotoCaption(event.target.value)} placeholder="사진에 남길 한마디 (선택)" /><input className="photo-input" type="file" accept="image/*" disabled={uploadingPhoto} onChange={(event) => { void uploadPlayPhoto(event.target.files?.[0]); event.currentTarget.value = ""; }} /></Space.Compact><Typography.Paragraph type="secondary">최대 5MB의 이미지 파일을 추가할 수 있습니다.</Typography.Paragraph><div className="play-photo-grid">{(selected as CollectionGame).photos.map((photo) => <figure key={photo.id}><img src={photo.url} alt={photo.caption || `${selected.title} 플레이 사진`} /><figcaption>{photo.caption || "플레이 기록"}</figcaption><Button size="small" danger onClick={() => void deletePlayPhoto(photo.id)}>삭제</Button></figure>)}</div></div>}
                       <Space className="form-actions"><Button onClick={() => { setSelected(null); form.resetFields(); }}>취소</Button><Button type="primary" htmlType="submit" loading={loadingDetail || saving}>{isEditingSelected ? "수정 저장" : "컬렉션에 저장"}</Button></Space>
                     </Form> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={loadingDetail ? "게임 정보를 불러오는 중…" : "검색 결과에서 게임을 선택하세요."} />}
                   </Card> : <Card id="registration" className="registration-card" title="관리자 로그인" extra={<LockOutlined />}><Typography.Paragraph type="secondary">컬렉션은 누구나 볼 수 있지만, 등록과 수정은 관리자만 할 수 있습니다.</Typography.Paragraph><Input.Password value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} onPressEnter={() => void login()} placeholder="관리자 비밀번호" /><Button type="primary" block loading={loggingIn} onClick={() => void login()} style={{ marginTop: 12 }}>관리자 로그인</Button></Card>}
