@@ -52,6 +52,7 @@ const pageMetadata = {
   tags: { title: "태그 관리", description: "컬렉션을 분류하는 태그를 확인하고 관리하세요." },
   recommend: { title: "모임 추천", description: "참가 인원과 연령에 맞는 게임을 찾아보세요." },
   registration: { title: "게임 추가", description: "Boardlife에서 게임을 찾아 컬렉션에 등록하세요." },
+  detail: { title: "게임 상세", description: "보드게임 정보와 플레이 기록을 확인하세요." },
 };
 
 function Cover({ game, size = "regular" }: { game: Pick<BoardlifeSearchResult, "title" | "image" | "thumbnail">; size?: "small" | "regular" }) {
@@ -66,6 +67,7 @@ export function BoardShelfApp() {
   const [candidates, setCandidates] = useState<BoardlifeSearchResult[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [selected, setSelected] = useState<BoardGameMetadata | null>(null);
+  const [viewingGame, setViewingGame] = useState<CollectionGame | null>(null);
   const [searching, setSearching] = useState(false);
   const [loadingDetail, startDetailTransition] = useTransition();
   const [saving, setSaving] = useState(false);
@@ -183,6 +185,15 @@ export function BoardShelfApp() {
     setQuery("");
     form.setFieldsValue({ ...game, status: game.status ?? "owned" });
     changePage("registration");
+  }
+
+  function openGame(game: CollectionGame) {
+    if (isAdmin) {
+      editGame(game);
+      return;
+    }
+    setViewingGame(game);
+    changePage("detail");
   }
 
   async function uploadPlayPhoto(file?: File) {
@@ -304,9 +315,10 @@ export function BoardShelfApp() {
                       <Col xs={24} sm={8}><Statistic title="태그" value={collectionTags.length} suffix="개" /></Col>
                     </Row>
                   </Card>{popularTagGroups.length ? <div className="tag-dashboard">{popularTagGroups.map(({ tag, count, games }) => <Card className="section-card tag-game-card" key={tag} title={<Space size={8}><Tag color="blue">{tag}</Tag><Typography.Text type="secondary">{count}개 게임</Typography.Text></Space>}><div className="tag-game-row">{games.map((game) => <article className={`tag-game-item${isAdmin ? " editable" : ""}`} key={game.id} role={isAdmin ? "button" : undefined} tabIndex={isAdmin ? 0 : undefined} onClick={isAdmin ? () => editGame(game) : undefined} onKeyDown={isAdmin ? (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); editGame(game); } } : undefined}><Cover game={game} /><Typography.Text strong ellipsis>{game.title}</Typography.Text><Space size={3}><Rate disabled allowHalf value={game.personalRating ?? 0} /><Typography.Text type="secondary">{game.personalRating?.toFixed(1) ?? "-"}</Typography.Text></Space></article>)}</div></Card>)}</div> : <Card className="section-card" title="시작하기"><Typography.Paragraph type="secondary">관리자 로그인 후 첫 보드게임을 등록하면 태그별 게임 목록이 표시됩니다.</Typography.Paragraph></Card>}</div>
-                  <div hidden={activeMenu !== "collection"}><Card id="collection" className="section-card collection-card" title="내 보유 게임" extra={<Typography.Text type="secondary">{isAdmin ? "게임을 클릭해 수정" : "최근 추가순"}</Typography.Text>}>
+                  <div hidden={activeMenu !== "detail"}><Card className="section-card" title={viewingGame?.title ?? "게임 상세"}>{viewingGame ? <><div className="selected-game"><Cover game={viewingGame} /><div><Typography.Title level={4}>{viewingGame.title}</Typography.Title><Typography.Text type="secondary">{viewingGame.englishTitle} {viewingGame.year ? `(${viewingGame.year})` : ""}</Typography.Text><br /><Rate disabled allowHalf value={viewingGame.personalRating ?? 0} /><Typography.Text> {viewingGame.personalRating?.toFixed(1) ?? "평가 없음"}</Typography.Text></div></div><Space wrap>{viewingGame.tags.map((tag) => <Tag key={tag}>{tag}</Tag>)}</Space><Typography.Paragraph>{viewingGame.review || "등록된 한줄 리뷰가 없습니다."}</Typography.Paragraph><Typography.Text type="secondary">{viewingGame.minPlayers}-{viewingGame.maxPlayers}명 · {viewingGame.minAge}세 이상 · {viewingGame.playTime ?? "시간 미입력"} · 플레이 {viewingGame.plays}회</Typography.Text><div className="play-photo-grid">{viewingGame.photos.map((photo) => <figure key={photo.id}><img src={photo.url} alt={photo.caption || `${viewingGame.title} 플레이 사진`} /><figcaption>{photo.caption || "플레이 기록"}</figcaption></figure>)}</div></> : <Empty description="게임을 찾지 못했습니다." />}</Card></div>
+                  <div hidden={activeMenu !== "collection"}><Card id="collection" className="section-card collection-card" title="내 보유 게임" extra={<Typography.Text type="secondary">{isAdmin ? "게임을 클릭해 수정" : "게임을 클릭해 상세 보기"}</Typography.Text>}>
                     <div className="game-grid">
-                      {collection.map((game) => <button className={`game-item${isAdmin ? " editable" : ""}`} key={game.id} type="button" disabled={!isAdmin} onClick={() => editGame(game)}><Cover game={game} /><div className="game-info"><Typography.Text strong ellipsis>{game.title}</Typography.Text><Typography.Text type="secondary" className="english" ellipsis>{game.englishTitle}</Typography.Text><Space size={4}><Rate disabled allowHalf value={game.personalRating} count={1} /><Typography.Text>{game.personalRating?.toFixed(1) ?? "-"}</Typography.Text></Space><div className="game-tags">{game.tags.slice(0, 2).map((tag) => <Tag key={tag}>{tag}</Tag>)}</div><Typography.Text type="secondary">플레이 {game.plays}회</Typography.Text></div></button>)}
+                      {collection.map((game) => <button className="game-item editable" key={game.id} type="button" onClick={() => openGame(game)}><Cover game={game} /><div className="game-info"><Typography.Text strong ellipsis>{game.title}</Typography.Text><Typography.Text type="secondary" className="english" ellipsis>{game.englishTitle}</Typography.Text><Space size={4}><Rate disabled allowHalf value={game.personalRating} count={1} /><Typography.Text>{game.personalRating?.toFixed(1) ?? "-"}</Typography.Text></Space><div className="game-tags">{game.tags.slice(0, 2).map((tag) => <Tag key={tag}>{tag}</Tag>)}</div><Typography.Text type="secondary">플레이 {game.plays}회</Typography.Text></div></button>)}
                     </div>
                     {!collection.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="아직 등록한 보드게임이 없습니다." />}
                   </Card></div>
