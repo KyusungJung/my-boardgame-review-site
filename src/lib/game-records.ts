@@ -32,7 +32,7 @@ export function serializeGame(game: GameWithTags): CollectionGame {
 }
 
 export function gameDataFromInput(input: CollectionGame) {
-  const status = input.status.toUpperCase() as GameStatus;
+  const status = (input.status ?? "owned").toUpperCase() as GameStatus;
   return {
     title: input.title.trim(),
     englishTitle: input.englishTitle?.trim() ?? "",
