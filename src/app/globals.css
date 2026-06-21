@@ -27,6 +27,8 @@ body { margin: 0; color: rgba(0, 0, 0, .88); font-family: var(--font-sans); }
 .tag-game-item .ant-rate { color: #faad14; font-size: 13px; }
 .game-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .game-item { display: flex; min-width: 0; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.game-item.editable { cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease; }
+.game-item.editable:hover, .game-item.editable:focus-visible { border-color: #91caff; box-shadow: 0 0 0 3px rgba(22, 119, 255, .12); outline: none; }
 .game-info { display: grid; min-width: 0; align-content: start; gap: 4px; font-size: 12px; }
 .game-info .ant-rate { font-size: 13px; color: #faad14; }
 .english { font-size: 12px; }

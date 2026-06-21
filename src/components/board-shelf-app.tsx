@@ -138,7 +138,10 @@ export function BoardShelfApp() {
       .slice(0, 3);
   }, [collection]);
 
-  const currentPage = pageMetadata[activeMenu as keyof typeof pageMetadata] ?? pageMetadata.dashboard;
+  const isEditingSelected = selected ? collection.some((game) => game.id === selected.id) : false;
+  const currentPage = activeMenu === "registration" && isEditingSelected
+    ? { title: "게임 수정", description: "등록한 보드게임 정보를 수정하세요." }
+    : pageMetadata[activeMenu as keyof typeof pageMetadata] ?? pageMetadata.dashboard;
 
   function changePage(key: string) {
     if (!(key in pageMetadata)) return;
@@ -164,6 +167,13 @@ export function BoardShelfApp() {
         form.setFieldsValue({ ...fallback, tags: [], personalRating: 0, review: "", plays: 0, status: "owned", createdAt: new Date().toISOString() });
       }
     });
+  }
+
+  function editGame(game: CollectionGame) {
+    setSelected(game);
+    setQuery("");
+    form.setFieldsValue({ ...game, status: game.status ?? "owned" });
+    changePage("registration");
   }
 
   async function saveGame(values: CollectionGame) {
@@ -251,9 +261,9 @@ export function BoardShelfApp() {
                       <Col xs={24} sm={8}><Statistic title="태그" value={collectionTags.length} suffix="개" /></Col>
                     </Row>
                   </Card>{popularTagGroups.length ? <div className="tag-dashboard">{popularTagGroups.map(({ tag, count, games }) => <Card className="section-card tag-game-card" key={tag} title={<Space size={8}><Tag color="blue">{tag}</Tag><Typography.Text type="secondary">{count}개 게임</Typography.Text></Space>}><div className="tag-game-row">{games.map((game) => <article className="tag-game-item" key={game.id}><Cover game={game} /><Typography.Text strong ellipsis>{game.title}</Typography.Text><Space size={3}><Rate disabled allowHalf value={game.personalRating ?? 0} /><Typography.Text type="secondary">{game.personalRating?.toFixed(1) ?? "-"}</Typography.Text></Space></article>)}</div></Card>)}</div> : <Card className="section-card" title="시작하기"><Typography.Paragraph type="secondary">관리자 로그인 후 첫 보드게임을 등록하면 태그별 게임 목록이 표시됩니다.</Typography.Paragraph></Card>}</div>
-                  <div hidden={activeMenu !== "collection"}><Card id="collection" className="section-card collection-card" title="내 보유 게임" extra={<Typography.Text type="secondary">최근 추가순</Typography.Text>}>
+                  <div hidden={activeMenu !== "collection"}><Card id="collection" className="section-card collection-card" title="내 보유 게임" extra={<Typography.Text type="secondary">{isAdmin ? "게임을 클릭해 수정" : "최근 추가순"}</Typography.Text>}>
                     <div className="game-grid">
-                      {collection.map((game) => <article className="game-item" key={game.id}><Cover game={game} /><div className="game-info"><Typography.Text strong ellipsis>{game.title}</Typography.Text><Typography.Text type="secondary" className="english" ellipsis>{game.englishTitle}</Typography.Text><Space size={4}><Rate disabled allowHalf value={game.personalRating} count={1} /><Typography.Text>{game.personalRating?.toFixed(1) ?? "-"}</Typography.Text></Space><div className="game-tags">{game.tags.slice(0, 2).map((tag) => <Tag key={tag}>{tag}</Tag>)}</div><Typography.Text type="secondary">플레이 {game.plays}회</Typography.Text></div></article>)}
+                      {collection.map((game) => <article className={`game-item${isAdmin ? " editable" : ""}`} key={game.id} role={isAdmin ? "button" : undefined} tabIndex={isAdmin ? 0 : undefined} onClick={isAdmin ? () => editGame(game) : undefined} onKeyDown={isAdmin ? (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); editGame(game); } } : undefined}><Cover game={game} /><div className="game-info"><Typography.Text strong ellipsis>{game.title}</Typography.Text><Typography.Text type="secondary" className="english" ellipsis>{game.englishTitle}</Typography.Text><Space size={4}><Rate disabled allowHalf value={game.personalRating} count={1} /><Typography.Text>{game.personalRating?.toFixed(1) ?? "-"}</Typography.Text></Space><div className="game-tags">{game.tags.slice(0, 2).map((tag) => <Tag key={tag}>{tag}</Tag>)}</div><Typography.Text type="secondary">플레이 {game.plays}회</Typography.Text></div></article>)}
                     </div>
                     {!collection.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="아직 등록한 보드게임이 없습니다." />}
                   </Card></div>
@@ -264,7 +274,7 @@ export function BoardShelfApp() {
                   </Card></div>
                 </Col>}
                 <Col xs={24} xl={activeMenu === "registration" ? 24 : 9}>
-                  {isAdmin ? <Card id="registration" className="registration-card" title="게임 등록" extra={<Tag color="blue">Boardlife</Tag>}>
+                  {isAdmin ? <Card id="registration" className="registration-card" title={isEditingSelected ? "게임 수정" : "게임 등록"} extra={<Tag color="blue">Boardlife</Tag>}>
                     <Typography.Paragraph type="secondary">게임명을 검색해 후보를 고른 뒤, 자동으로 채워진 정보를 확인하세요.</Typography.Paragraph>
                     <Input value={query} prefix={<SearchOutlined />} placeholder="예: 스플랜더, Splendor" onChange={(event) => setQuery(event.target.value)} suffix={searching ? "검색 중" : null} />
                     {(candidates.length > 0 || searching) && <List className="search-results" loading={searching} dataSource={candidates} renderItem={(candidate) => <List.Item onClick={() => chooseCandidate(candidate)}><List.Item.Meta avatar={<Cover game={candidate} size="small" />} title={candidate.title} description={`${candidate.englishTitle || "영문명 없음"} · ${candidate.year ?? "연도 미상"}`} /></List.Item>} />}
@@ -278,7 +288,7 @@ export function BoardShelfApp() {
                       <Form.Item name="personalRating" label="나의 평점"><Rate allowHalf /></Form.Item>
                       <Form.Item name="review" label="한줄 리뷰"><Input.TextArea rows={2} placeholder="내가 느낀 재미와 추천 이유를 남겨보세요." /></Form.Item>
                       <Form.Item name="plays" label="플레이 횟수"><InputNumber min={0} className="full-width" /></Form.Item>
-                      <Space className="form-actions"><Button onClick={() => { setSelected(null); form.resetFields(); }}>취소</Button><Button type="primary" htmlType="submit" loading={loadingDetail || saving}>컬렉션에 저장</Button></Space>
+                      <Space className="form-actions"><Button onClick={() => { setSelected(null); form.resetFields(); }}>취소</Button><Button type="primary" htmlType="submit" loading={loadingDetail || saving}>{isEditingSelected ? "수정 저장" : "컬렉션에 저장"}</Button></Space>
                     </Form> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={loadingDetail ? "게임 정보를 불러오는 중…" : "검색 결과에서 게임을 선택하세요."} />}
                   </Card> : <Card id="registration" className="registration-card" title="관리자 로그인" extra={<LockOutlined />}><Typography.Paragraph type="secondary">컬렉션은 누구나 볼 수 있지만, 등록과 수정은 관리자만 할 수 있습니다.</Typography.Paragraph><Input.Password value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} onPressEnter={() => void login()} placeholder="관리자 비밀번호" /><Button type="primary" block loading={loggingIn} onClick={() => void login()} style={{ marginTop: 12 }}>관리자 로그인</Button></Card>}
                 </Col>
