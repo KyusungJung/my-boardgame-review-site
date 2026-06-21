@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { searchBoardlife } from "@/lib/boardlife";
 
+export const dynamic = "force-dynamic";
+export const preferredRegion = "icn1";
+
 export async function GET(request: NextRequest) {
   const word = request.nextUrl.searchParams.get("word")?.trim() ?? "";
   if (word.length < 2) return NextResponse.json([]);

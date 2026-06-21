@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Alert,
   App,
   Avatar,
   Button,
@@ -59,6 +60,7 @@ export function BoardShelfApp() {
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const [candidates, setCandidates] = useState<BoardlifeSearchResult[]>([]);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [selected, setSelected] = useState<BoardGameMetadata | null>(null);
   const [searching, setSearching] = useState(false);
   const [loadingDetail, startDetailTransition] = useTransition();
@@ -86,18 +88,23 @@ export function BoardShelfApp() {
   useEffect(() => {
     if (deferredQuery.trim().length < 2) {
       setCandidates([]);
+      setSearchError(null);
       return;
     }
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       setSearching(true);
+      setSearchError(null);
       try {
         const response = await fetch(`/api/boardlife/search?word=${encodeURIComponent(deferredQuery)}`, { signal: controller.signal });
-        const result = await response.json() as BoardlifeSearchResult[];
-        if (!response.ok) throw new Error("검색 실패");
-        setCandidates(result);
+        const result = await response.json() as BoardlifeSearchResult[] | { message?: string };
+        if (!response.ok) throw new Error("message" in result ? result.message : "Boardlife 검색에 실패했습니다.");
+        setCandidates(Array.isArray(result) ? result : []);
       } catch (error) {
-        if ((error as Error).name !== "AbortError") setCandidates([]);
+        if ((error as Error).name !== "AbortError") {
+          setCandidates([]);
+          setSearchError(error instanceof Error ? error.message : "Boardlife 검색에 실패했습니다.");
+        }
       } finally {
         setSearching(false);
       }
@@ -233,6 +240,7 @@ export function BoardShelfApp() {
                     <Typography.Paragraph type="secondary">게임명을 검색해 후보를 고른 뒤, 자동으로 채워진 정보를 확인하세요.</Typography.Paragraph>
                     <Input value={query} prefix={<SearchOutlined />} placeholder="예: 스플랜더, Splendor" onChange={(event) => setQuery(event.target.value)} suffix={searching ? "검색 중" : null} />
                     {(candidates.length > 0 || searching) && <List className="search-results" loading={searching} dataSource={candidates} renderItem={(candidate) => <List.Item onClick={() => chooseCandidate(candidate)}><List.Item.Meta avatar={<Cover game={candidate} size="small" />} title={candidate.title} description={`${candidate.englishTitle || "영문명 없음"} · ${candidate.year ?? "연도 미상"}`} /></List.Item>} />}
+                    {searchError && <Alert className="search-error" type="warning" showIcon message="Boardlife 검색을 완료하지 못했습니다." description={searchError} />}
                     <Divider />
                     {selected ? <Form form={form} layout="vertical" onFinish={saveGame} requiredMark={false}>
                       <div className="selected-game"><Cover game={selected} /><div><Typography.Title level={4}>{selected.title}</Typography.Title><Typography.Text type="secondary">{selected.englishTitle} {selected.year ? `(${selected.year})` : ""}</Typography.Text><br /><Typography.Link href={selected.sourceUrl} target="_blank">Boardlife 원본 보기</Typography.Link></div></div>
