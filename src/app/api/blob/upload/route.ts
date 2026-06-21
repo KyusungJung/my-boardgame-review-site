@@ -11,6 +11,8 @@ export async function POST(request: NextRequest) {
     onBeforeGenerateToken: async () => ({
       allowedContentTypes: ["image/jpeg", "image/png", "image/webp", "image/gif"],
       maximumSizeInBytes: 10 * 1024 * 1024,
+      addRandomSuffix: true,
+      tokenPayload: JSON.stringify({ source: "game-photo" }),
     }),
     onUploadCompleted: async () => {},
   });
