@@ -209,6 +209,22 @@ export function BoardShelfApp() {
     form.resetFields();
   }
 
+  async function shareCollection() {
+    const url = window.location.origin;
+    const shareData = { title: "Board Shelf 컬렉션", text: `보드게임 컬렉션 ${collection.length}개를 확인해 보세요.`, url };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      messageApi.success("컬렉션 주소를 클립보드에 복사했습니다.");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      messageApi.error("공유 주소를 복사하지 못했습니다.");
+    }
+  }
+
   return (
     <ConfigProvider theme={{ token: { colorPrimary: "#1677ff", borderRadius: 8, fontFamily: "var(--font-sans)" } }}>
       <App>{messageContext}
@@ -221,7 +237,7 @@ export function BoardShelfApp() {
               { key: "tags", icon: <TagsOutlined />, label: "태그 관리" },
               { key: "recommend", icon: <TeamOutlined />, label: "모임 추천" },
             ]} />
-            <div className="side-bottom">{isAdmin && <Button type="primary" block icon={<PlusOutlined />} onClick={() => changePage("registration")}>게임 추가</Button>}<Button type="text" block icon={<ShareAltOutlined />}>전체 컬렉션 공유</Button>{isAdmin && <Button type="text" block icon={<LogoutOutlined />} onClick={() => void logout()}>관리자 로그아웃</Button>}</div>
+            <div className="side-bottom">{isAdmin && <Button type="primary" block icon={<PlusOutlined />} onClick={() => changePage("registration")}>게임 추가</Button>}<Button type="text" block icon={<ShareAltOutlined />} onClick={() => void shareCollection()}>전체 컬렉션 공유</Button>{isAdmin && <Button type="text" block icon={<LogoutOutlined />} onClick={() => void logout()}>관리자 로그아웃</Button>}</div>
           </Sider>
           <Layout>
             <Header className="top-header"><div><Typography.Title level={2}>{currentPage.title}</Typography.Title><Typography.Text type="secondary">{currentPage.description}</Typography.Text></div><Avatar style={{ background: "#e6f4ff", color: "#0958d9" }}>KJ</Avatar></Header>
