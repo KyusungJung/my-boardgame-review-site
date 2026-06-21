@@ -24,6 +24,9 @@ body { margin: 0; color: rgba(0, 0, 0, .88); font-family: var(--font-sans); }
 .tag-game-card .ant-card-head-title { overflow: visible; }
 .tag-game-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
 .tag-game-item { display: grid; min-width: 0; justify-items: center; gap: 6px; text-align: center; }
+.tag-game-item.editable { cursor: pointer; }
+.tag-game-item.editable:hover .cover, .tag-game-item.editable:focus-visible .cover { box-shadow: 0 0 0 3px rgba(22, 119, 255, .35); }
+.tag-game-item.editable:focus-visible { outline: none; }
 .tag-game-item .cover { width: 74px; height: 102px; }
 .tag-game-item .ant-typography { width: 100%; font-size: 12px; }
 .tag-game-item .ant-rate { color: #faad14; font-size: 13px; }
