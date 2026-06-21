@@ -21,6 +21,8 @@ body { margin: 0; color: rgba(0, 0, 0, .88); font-family: var(--font-sans); }
 .section-card, .registration-card, .recommendation-card { border-color: var(--line); box-shadow: 0 2px 8px rgba(0, 21, 41, .025); }
 .section-card { margin-bottom: 20px; }
 .collection-card .ant-card-body { padding-top: 18px; }
+.collection-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.collection-toolbar .ant-input-search { max-width: 360px; }
 .tag-game-card .ant-card-head-title { overflow: visible; }
 .tag-game-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
 .tag-game-item { display: grid; min-width: 0; justify-items: center; gap: 6px; text-align: center; }
@@ -82,4 +84,4 @@ body { margin: 0; color: rgba(0, 0, 0, .88); font-family: var(--font-sans); }
 .play-photo-grid img { width: 100%; aspect-ratio: 1; border-radius: 7px; object-fit: cover; }
 .play-photo-grid figcaption { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 1199px) { .registration-card { position: static; } }
-@media (max-width: 768px) { .side-nav { display: none !important; }.mobile-nav-trigger { display: inline-flex; }.top-header { min-height: 82px; padding: 17px 18px; }.top-header .ant-typography.ant-typography-h2 { font-size: 24px; }.content-area { padding: 18px; }.game-grid, .recommendation-list { grid-template-columns: 1fr; }.tag-game-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }.recommendation-controls { flex-wrap: wrap; }.side-bottom { display: none; } }
+@media (max-width: 768px) { .side-nav { display: none !important; }.mobile-nav-trigger { display: inline-flex; }.top-header { min-height: 82px; padding: 17px 18px; }.top-header .ant-typography.ant-typography-h2 { font-size: 24px; }.content-area { padding: 18px; }.collection-toolbar { align-items: stretch; flex-direction: column; }.collection-toolbar .ant-input-search { max-width: none; }.game-grid, .recommendation-list { grid-template-columns: 1fr; }.tag-game-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }.recommendation-controls { flex-wrap: wrap; }.side-bottom { display: none; } }
