@@ -34,7 +34,6 @@ import {
   PlusOutlined,
   SearchOutlined,
   ShareAltOutlined,
-  StarFilled,
   TagsOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
@@ -124,6 +123,7 @@ export function BoardShelfApp() {
     }), [age, collection, people]);
 
   const collectionTags = useMemo(() => [...new Set(collection.flatMap((game) => game.tags))].toSorted(), [collection]);
+  const recentGames = useMemo(() => collection.toSorted((first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime()).slice(0, 4), [collection]);
 
   const currentPage = pageMetadata[activeMenu as keyof typeof pageMetadata] ?? pageMetadata.dashboard;
 
@@ -217,12 +217,11 @@ export function BoardShelfApp() {
                 {activeMenu !== "registration" && <Col xs={24} xl={15}>
                   <div hidden={activeMenu !== "dashboard"}><Card className="section-card" title="컬렉션 요약">
                     <Row gutter={[12, 12]}>
-                      <Col xs={12} sm={6}><Statistic title="보유 게임" value={collection.length} suffix="개" /></Col>
-                      <Col xs={12} sm={6}><Statistic title="총 플레이" value={collection.reduce((sum, game) => sum + game.plays, 0)} suffix="회" /></Col>
-                      <Col xs={12} sm={6}><Statistic title="태그" value={collectionTags.length} suffix="개" /></Col>
-                      <Col xs={12} sm={6}><Statistic title="평균 평점" value={collection.length ? collection.reduce((sum, game) => sum + (game.personalRating ?? 0), 0) / collection.length : 0} precision={1} prefix={<StarFilled className="star" />} suffix="/ 5" /></Col>
+                      <Col xs={24} sm={8}><Statistic title="보유 게임" value={collection.length} suffix="개" /></Col>
+                      <Col xs={24} sm={8}><Statistic title="총 플레이" value={collection.reduce((sum, game) => sum + game.plays, 0)} suffix="회" /></Col>
+                      <Col xs={24} sm={8}><Statistic title="태그" value={collectionTags.length} suffix="개" /></Col>
                     </Row>
-                  </Card><Card className="section-card" title="시작하기"><Typography.Paragraph type="secondary">관리자 로그인 후 보드게임을 등록하면, 컬렉션과 태그 및 모임 추천이 자동으로 채워집니다.</Typography.Paragraph></Card></div>
+                  </Card>{recentGames.length ? <Card className="section-card" title="최근 등록한 게임" extra={<Button type="link" onClick={() => changePage("collection")}>전체 보기</Button>}><List dataSource={recentGames} renderItem={(game) => <List.Item><List.Item.Meta avatar={<Cover game={game} size="small" />} title={game.title} description={<Space size={8} wrap><Typography.Text type="secondary">{game.englishTitle}</Typography.Text><Rate disabled allowHalf value={game.personalRating ?? 0} /><Typography.Text>{game.personalRating?.toFixed(1) ?? "평가 없음"}</Typography.Text></Space>} /><Space size={4} wrap>{game.tags.slice(0, 3).map((tag) => <Tag key={tag}>{tag}</Tag>)}</Space></List.Item>} /></Card> : <Card className="section-card" title="시작하기"><Typography.Paragraph type="secondary">관리자 로그인 후 첫 보드게임을 등록하면 최근 등록 목록과 평가가 표시됩니다.</Typography.Paragraph></Card>}</div>
                   <div hidden={activeMenu !== "collection"}><Card id="collection" className="section-card collection-card" title="내 보유 게임" extra={<Typography.Text type="secondary">최근 추가순</Typography.Text>}>
                     <div className="game-grid">
                       {collection.map((game) => <article className="game-item" key={game.id}><Cover game={game} /><div className="game-info"><Typography.Text strong ellipsis>{game.title}</Typography.Text><Typography.Text type="secondary" className="english" ellipsis>{game.englishTitle}</Typography.Text><Space size={4}><Rate disabled allowHalf value={game.personalRating} count={1} /><Typography.Text>{game.personalRating?.toFixed(1) ?? "-"}</Typography.Text></Space><div className="game-tags">{game.tags.slice(0, 2).map((tag) => <Tag key={tag}>{tag}</Tag>)}</div><Typography.Text type="secondary">플레이 {game.plays}회</Typography.Text></div></article>)}
