@@ -48,6 +48,14 @@ function textAfterLabel(bodyText: string, label: string, stopLabels: string[]) {
   return after.slice(0, stops.length ? Math.min(...stops) : 180).replace(/\s+/g, " ").trim();
 }
 
+function uniqueTags(tags: string[]) {
+  return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))];
+}
+
+function readerTags(bodyText: string) {
+  return uniqueTags([...bodyText.matchAll(/\[([^\]]+)\]\(https?:\/\/boardlife\.co\.kr\/info\/(?:type|category|mechanisms)\/\d+\)/g)].map((match) => match[1]));
+}
+
 async function fetchBoardlife(path: string) {
   const response = await fetch(`${BOARDLIFE_BASE_URL}${path}`, {
     headers: {
@@ -93,6 +101,7 @@ async function getBoardlifeGameThroughReader(id: string): Promise<BoardGameMetad
     complexity: numberFrom(bodyText.match(/난이도\s*(\d+(?:\.\d+)?)/)?.[1]),
     boardlifeRating: numberFrom(bodyText.match(/평점\s*(\d+(?:\.\d+)?)/)?.[1]),
     languageDependency: bodyText.match(/언어의존도\s*([^\n]+)/)?.[1]?.slice(0, 24),
+    autoTags: readerTags(bodyText),
     sourceFetchedAt: new Date().toISOString(),
   };
   setCached(`detail:${id}`, result, DETAIL_CACHE_TTL);
@@ -153,6 +162,7 @@ export async function getBoardlifeGame(id: string): Promise<BoardGameMetadata> {
   const languageDependency = textAfterLabel(bodyText, "언어의존도", ["편집", "주요 정보", "인원"]);
   const headingTexts = $("h1, h2, h3").map((_, element) => $(element).text().trim()).get();
   const englishTitle = headingTexts.find((heading) => /[A-Za-z]{3,}/.test(heading) && heading !== title) ?? "";
+  const autoTags = uniqueTags($("a").filter((_, element) => /\/info\/(type|category|mechanisms)\/\d+/.test($(element).attr("href") ?? "")).map((_, element) => $(element).text()).get());
 
   const result: BoardGameMetadata = {
     id,
@@ -170,6 +180,7 @@ export async function getBoardlifeGame(id: string): Promise<BoardGameMetadata> {
     complexity: complexityMatch ? Number(complexityMatch[1]) : undefined,
     boardlifeRating: ratingMatch ? Number(ratingMatch[1]) : undefined,
     languageDependency: languageDependency?.slice(0, 24),
+    autoTags,
     sourceFetchedAt: new Date().toISOString(),
   };
 

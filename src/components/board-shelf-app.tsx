@@ -143,7 +143,7 @@ export function BoardShelfApp() {
         if (!response.ok) throw new Error("상세 조회 실패");
         const resolved = { ...candidate, ...detail, image: detail.image || candidate.image, thumbnail: detail.thumbnail || candidate.thumbnail };
         setSelected(resolved);
-        form.setFieldsValue({ ...resolved, tags: [], personalRating: 0, review: "", plays: 0, status: "owned", createdAt: new Date().toISOString() });
+        form.setFieldsValue({ ...resolved, tags: resolved.autoTags ?? [], personalRating: 0, review: "", plays: 0, status: "owned", createdAt: new Date().toISOString() });
       } catch {
         messageApi.error("상세 정보를 읽지 못했습니다. 직접 입력할 수 있습니다.");
         const fallback: BoardGameMetadata = { ...candidate, sourceUrl: `https://boardlife.co.kr/game/${candidate.id}`, sourceFetchedAt: new Date().toISOString() };
