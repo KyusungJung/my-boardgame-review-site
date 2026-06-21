@@ -41,12 +41,11 @@ import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "r
 import type { BoardGameMetadata, BoardlifeSearchResult, CollectionGame } from "@/lib/types";
 
 const { Header, Sider, Content } = Layout;
-const sectionTargets: Record<string, string> = {
-  dashboard: "dashboard",
-  collection: "collection",
-  tags: "tags",
-  recommend: "recommend",
-  registration: "registration",
+const pageMetadata = {
+  dashboard: { title: "대시보드", description: "내 보드게임 컬렉션 현황을 한눈에 관리하세요." },
+  collection: { title: "게임 목록", description: "등록한 보드게임과 플레이 기록을 확인하세요." },
+  tags: { title: "태그 관리", description: "컬렉션을 분류하는 태그를 확인하고 관리하세요." },
+  recommend: { title: "모임 추천", description: "참가 인원과 연령에 맞는 게임을 찾아보세요." },
 };
 
 function Cover({ game, size = "regular" }: { game: Pick<BoardlifeSearchResult, "title" | "image" | "thumbnail">; size?: "small" | "regular" }) {
@@ -118,11 +117,12 @@ export function BoardShelfApp() {
 
   const collectionTags = useMemo(() => [...new Set(collection.flatMap((game) => game.tags))].toSorted(), [collection]);
 
-  function navigateToSection(key: string) {
-    const targetId = sectionTargets[key];
-    if (!targetId) return;
-    setActiveMenu(key === "registration" ? activeMenu : key);
-    document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const currentPage = pageMetadata[activeMenu as keyof typeof pageMetadata] ?? pageMetadata.dashboard;
+
+  function changePage(key: string) {
+    if (!(key in pageMetadata)) return;
+    setActiveMenu(key);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function chooseCandidate(candidate: BoardlifeSearchResult) {
@@ -194,39 +194,38 @@ export function BoardShelfApp() {
         <Layout className="app-shell">
           <Sider width={236} breakpoint="lg" collapsedWidth={0} className="side-nav">
             <div className="brand">Board <span>Shelf</span></div>
-            <Menu theme="dark" mode="inline" selectedKeys={[activeMenu]} onClick={({ key }) => navigateToSection(key)} items={[
+            <Menu theme="dark" mode="inline" selectedKeys={[activeMenu]} onClick={({ key }) => changePage(key)} items={[
               { key: "dashboard", icon: <DashboardOutlined />, label: "대시보드" },
               { key: "collection", icon: <BookOutlined />, label: "게임 목록" },
               { key: "tags", icon: <TagsOutlined />, label: "태그 관리" },
               { key: "recommend", icon: <TeamOutlined />, label: "모임 추천" },
             ]} />
-            <div className="side-bottom">{isAdmin && <Button type="primary" block icon={<PlusOutlined />} onClick={() => navigateToSection("registration")}>게임 추가</Button>}<Button type="text" block icon={<ShareAltOutlined />}>전체 컬렉션 공유</Button>{isAdmin && <Button type="text" block icon={<LogoutOutlined />} onClick={() => void logout()}>관리자 로그아웃</Button>}</div>
+            <div className="side-bottom">{isAdmin && <Button type="primary" block icon={<PlusOutlined />} onClick={() => document.getElementById("registration")?.scrollIntoView({ behavior: "smooth", block: "start" })}>게임 추가</Button>}<Button type="text" block icon={<ShareAltOutlined />}>전체 컬렉션 공유</Button>{isAdmin && <Button type="text" block icon={<LogoutOutlined />} onClick={() => void logout()}>관리자 로그아웃</Button>}</div>
           </Sider>
           <Layout>
-            <Header className="top-header"><div><Typography.Title level={2}>대시보드</Typography.Title><Typography.Text type="secondary">내 보드게임 컬렉션을 한눈에 관리하세요.</Typography.Text></div><Avatar style={{ background: "#e6f4ff", color: "#0958d9" }}>KJ</Avatar></Header>
+            <Header className="top-header"><div><Typography.Title level={2}>{currentPage.title}</Typography.Title><Typography.Text type="secondary">{currentPage.description}</Typography.Text></div><Avatar style={{ background: "#e6f4ff", color: "#0958d9" }}>KJ</Avatar></Header>
             <Content id="dashboard" className="content-area">
               <Row gutter={[20, 20]}>
                 <Col xs={24} xl={15}>
-                  <Card className="section-card" title="컬렉션 요약">
+                  <div hidden={activeMenu !== "dashboard"}><Card className="section-card" title="컬렉션 요약">
                     <Row gutter={[12, 12]}>
                       <Col xs={12} sm={6}><Statistic title="보유 게임" value={collection.length} suffix="개" /></Col>
                       <Col xs={12} sm={6}><Statistic title="총 플레이" value={collection.reduce((sum, game) => sum + game.plays, 0)} suffix="회" /></Col>
                       <Col xs={12} sm={6}><Statistic title="태그" value={collectionTags.length} suffix="개" /></Col>
                       <Col xs={12} sm={6}><Statistic title="평균 평점" value={collection.length ? collection.reduce((sum, game) => sum + (game.personalRating ?? 0), 0) / collection.length : 0} precision={1} prefix={<StarFilled className="star" />} suffix="/ 5" /></Col>
                     </Row>
-                  </Card>
-                  <Card id="collection" className="section-card collection-card" title="내 보유 게임" extra={<Typography.Text type="secondary">최근 추가순</Typography.Text>}>
+                  </Card><Card className="section-card" title="시작하기"><Typography.Paragraph type="secondary">관리자 로그인 후 보드게임을 등록하면, 컬렉션과 태그 및 모임 추천이 자동으로 채워집니다.</Typography.Paragraph></Card></div>
+                  <div hidden={activeMenu !== "collection"}><Card id="collection" className="section-card collection-card" title="내 보유 게임" extra={<Typography.Text type="secondary">최근 추가순</Typography.Text>}>
                     <div className="game-grid">
                       {collection.map((game) => <article className="game-item" key={game.id}><Cover game={game} /><div className="game-info"><Typography.Text strong ellipsis>{game.title}</Typography.Text><Typography.Text type="secondary" className="english" ellipsis>{game.englishTitle}</Typography.Text><Space size={4}><Rate disabled allowHalf value={game.personalRating} count={1} /><Typography.Text>{game.personalRating?.toFixed(1) ?? "-"}</Typography.Text></Space><div className="game-tags">{game.tags.slice(0, 2).map((tag) => <Tag key={tag}>{tag}</Tag>)}</div><Typography.Text type="secondary">플레이 {game.plays}회</Typography.Text></div></article>)}
                     </div>
                     {!collection.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="아직 등록한 보드게임이 없습니다." />}
-                    <Divider orientation="left" plain>내 태그</Divider>
-                    <div id="tags" className="tag-library">{collectionTags.map((tag) => <Tag color="blue" key={tag}>{tag}</Tag>)}{!collectionTags.length && <Typography.Text type="secondary">등록된 태그가 없습니다.</Typography.Text>}</div>
-                  </Card>
-                  <Card id="recommend" className="recommendation-card" title={`오늘의 추천 · ${people}명, ${age}세 이상`} extra={<Button type="link" onClick={() => setRecommendationOpen(true)}>자세히 보기</Button>}>
+                  </Card></div>
+                  <div hidden={activeMenu !== "tags"}><Card id="tags" className="section-card" title="내 태그" extra={<Typography.Text type="secondary">총 {collectionTags.length}개</Typography.Text>}><div className="tag-library">{collectionTags.map((tag) => <Tag color="blue" key={tag}>{tag}</Tag>)}{!collectionTags.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="등록된 태그가 없습니다." />}</div></Card></div>
+                  <div hidden={activeMenu !== "recommend"}><Card id="recommend" className="recommendation-card" title={`오늘의 추천 · ${people}명, ${age}세 이상`} extra={<Button type="link" onClick={() => setRecommendationOpen(true)}>자세히 보기</Button>}>
                     <div className="recommendation-controls"><span>참가 인원</span><InputNumber min={1} max={12} value={people} onChange={(value) => setPeople(value ?? 1)} /><span>최연소 연령</span><InputNumber min={0} max={99} value={age} onChange={(value) => setAge(value ?? 0)} /></div>
                     <div className="recommendation-list">{recommendations.slice(0, 3).map((game) => <div className="recommendation-item" key={game.id}><Cover game={game} size="small" /><div><Typography.Text strong>{game.title}</Typography.Text><Typography.Paragraph type="secondary">{game.bestPlayers === people ? `${people}명일 때 가장 좋아요` : `${game.minPlayers}-${game.maxPlayers}명 플레이 가능`} · {game.playTime ?? "시간 미입력"}</Typography.Paragraph></div></div>)}{!recommendations.length && <Empty description="조건에 맞는 게임이 없어요." image={Empty.PRESENTED_IMAGE_SIMPLE} />}</div>
-                  </Card>
+                  </Card></div>
                 </Col>
                 <Col xs={24} xl={9}>
                   {isAdmin ? <Card id="registration" className="registration-card" title="게임 등록" extra={<Tag color="blue">Boardlife</Tag>}>
