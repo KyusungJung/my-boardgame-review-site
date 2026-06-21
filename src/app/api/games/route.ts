@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
-import { gameDataFromInput, serializeGame } from "@/lib/game-records";
+import { gameDataFromInput, gameVideosFromInput, serializeGame } from "@/lib/game-records";
 import { prisma } from "@/lib/prisma";
 import type { CollectionGame } from "@/lib/types";
 
-const includeTags = { tags: { include: { tag: true } }, photos: { orderBy: { createdAt: "desc" } } } as const;
+const includeTags = { tags: { include: { tag: true } }, photos: { orderBy: { createdAt: "desc" } }, videos: { orderBy: { createdAt: "desc" } } } as const;
 
 function saveErrorResponse(error: unknown) {
   console.error("Failed to save board game", error);
@@ -36,12 +36,13 @@ export async function POST(request: NextRequest) {
 
   const tags = [...new Set((input.tags ?? []).map((tag) => tag.trim()).filter(Boolean))];
   const tagRelations = tags.map((name) => ({ tag: { connectOrCreate: { where: { name }, create: { name } } } }));
+  const videos = gameVideosFromInput(input);
 
   try {
     const game = await prisma.game.upsert({
       where: { boardlifeId: input.id },
-      create: { boardlifeId: input.id, ...gameDataFromInput(input), tags: { create: tagRelations } },
-      update: { ...gameDataFromInput(input), tags: { deleteMany: {}, create: tagRelations } },
+      create: { boardlifeId: input.id, ...gameDataFromInput(input), tags: { create: tagRelations }, videos: { create: videos } },
+      update: { ...gameDataFromInput(input), tags: { deleteMany: {}, create: tagRelations }, videos: { deleteMany: {}, create: videos } },
       include: includeTags,
     });
     return NextResponse.json(serializeGame(game));

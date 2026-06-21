@@ -30,6 +30,18 @@ export type CollectionGame = BoardGameMetadata & {
   status: "owned" | "wishlist" | "played";
   createdAt: string;
   photos: PlayPhoto[];
+  videos: GameVideo[];
 };
 
 export type PlayPhoto = { id: string; url: string; caption?: string; createdAt: string };
+
+export type GameVideo = {
+  id?: string;
+  youtubeId: string;
+  url: string;
+  title: string;
+  thumbnail?: string;
+  channelName?: string;
+  publishedAt?: string;
+  createdAt?: string;
+};

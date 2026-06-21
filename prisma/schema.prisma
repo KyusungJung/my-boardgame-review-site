@@ -39,8 +39,25 @@ model Game {
   updatedAt           DateTime    @updatedAt
   tags                GameTag[]
   photos              GamePhoto[]
+  videos              GameVideo[]
 
   @@index([createdAt])
+}
+
+model GameVideo {
+  id          String   @id @default(cuid())
+  youtubeId   String
+  url         String
+  title       String
+  thumbnail   String?
+  channelName String?
+  publishedAt DateTime?
+  createdAt   DateTime @default(now())
+  gameId      String
+  game        Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@unique([gameId, youtubeId])
+  @@index([gameId, createdAt])
 }
 
 model GamePhoto {

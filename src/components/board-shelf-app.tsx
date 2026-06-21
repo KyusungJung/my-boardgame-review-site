@@ -41,10 +41,11 @@ import {
   ShareAltOutlined,
   TagsOutlined,
   TeamOutlined,
+  YoutubeOutlined,
 } from "@ant-design/icons";
 import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { upload } from "@vercel/blob/client";
-import type { BoardGameMetadata, BoardlifeSearchResult, CollectionGame } from "@/lib/types";
+import type { BoardGameMetadata, BoardlifeSearchResult, CollectionGame, GameVideo } from "@/lib/types";
 
 const { Header, Sider, Content } = Layout;
 const pageMetadata = {
@@ -61,6 +62,17 @@ const statusLabel = { owned: "보유", wishlist: "위시리스트", played: "플
 function Cover({ game, size = "regular" }: { game: Pick<BoardlifeSearchResult, "title" | "image" | "thumbnail">; size?: "small" | "regular" }) {
   const imageUrl = game.image || game.thumbnail;
   return imageUrl ? <img className={`cover ${size}`} src={imageUrl} alt={`${game.title} 표지`} /> : <div className={`cover ${size} cover-fallback`} aria-label={`${game.title} 표지 없음`}>{game.title.slice(0, 2)}</div>;
+}
+
+function videoIdFromUrl(value: string) {
+  try {
+    const url = new URL(value.trim());
+    if (url.hostname === "youtu.be") return url.pathname.slice(1) || null;
+    if (url.hostname.endsWith("youtube.com")) return url.searchParams.get("v") || url.pathname.match(/\/(?:embed|shorts)\/([^/]+)/)?.[1] || null;
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 export function BoardShelfApp() {
@@ -87,7 +99,12 @@ export function BoardShelfApp() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [photoCaption, setPhotoCaption] = useState("");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [videoCandidates, setVideoCandidates] = useState<GameVideo[]>([]);
+  const [searchingVideos, setSearchingVideos] = useState(false);
+  const [videoSearchError, setVideoSearchError] = useState<string | null>(null);
+  const [manualVideoUrl, setManualVideoUrl] = useState("");
   const [form] = Form.useForm<CollectionGame>();
+  const selectedVideos = Form.useWatch("videos", form) ?? [];
   const [messageApi, messageContext] = message.useMessage();
 
   useEffect(() => {
@@ -186,12 +203,14 @@ export function BoardShelfApp() {
         if (!response.ok) throw new Error("상세 조회 실패");
         const resolved = { ...candidate, ...detail, image: detail.image || candidate.image, thumbnail: detail.thumbnail || candidate.thumbnail };
         setSelected(resolved);
-        form.setFieldsValue({ ...resolved, tags: resolved.autoTags ?? [], personalRating: 0, review: "", plays: 0, status: "owned", createdAt: new Date().toISOString() });
+        form.setFieldsValue({ ...resolved, tags: resolved.autoTags ?? [], personalRating: 0, review: "", plays: 0, status: "owned", videos: [], createdAt: new Date().toISOString() });
+        void searchRelatedVideos(resolved, true);
       } catch {
         messageApi.error("상세 정보를 읽지 못했습니다. 직접 입력할 수 있습니다.");
         const fallback: BoardGameMetadata = { ...candidate, sourceUrl: `https://boardlife.co.kr/game/${candidate.id}`, sourceFetchedAt: new Date().toISOString() };
         setSelected(fallback);
-        form.setFieldsValue({ ...fallback, tags: [], personalRating: 0, review: "", plays: 0, status: "owned", createdAt: new Date().toISOString() });
+        form.setFieldsValue({ ...fallback, tags: [], personalRating: 0, review: "", plays: 0, status: "owned", videos: [], createdAt: new Date().toISOString() });
+        void searchRelatedVideos(fallback, true);
       }
     });
   }
@@ -200,6 +219,9 @@ export function BoardShelfApp() {
     setSelected(game);
     setQuery("");
     form.setFieldsValue({ ...game, status: game.status ?? "owned" });
+    setVideoCandidates([]);
+    setVideoSearchError(null);
+    void searchRelatedVideos(game, false);
     changePage("registration");
   }
 
@@ -254,6 +276,49 @@ export function BoardShelfApp() {
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : "사진을 삭제하지 못했습니다.");
     }
+  }
+
+  async function searchRelatedVideos(game: Pick<BoardGameMetadata, "title" | "englishTitle">, autoAdd: boolean) {
+    setSearchingVideos(true);
+    setVideoSearchError(null);
+    try {
+      const searchParams = new URLSearchParams({ title: game.title, englishTitle: game.englishTitle ?? "" });
+      const response = await fetch(`/api/youtube/search?${searchParams}`);
+      const result = await response.json() as GameVideo[] | { message?: string };
+      if (!response.ok) throw new Error("message" in result ? result.message : "YouTube 영상 검색에 실패했습니다.");
+      const videos = Array.isArray(result) ? result : [];
+      setVideoCandidates(videos);
+      if (autoAdd && videos.length) form.setFieldValue("videos", videos.slice(0, 3));
+    } catch (error) {
+      setVideoCandidates([]);
+      setVideoSearchError(error instanceof Error ? error.message : "YouTube 영상 검색에 실패했습니다.");
+    } finally {
+      setSearchingVideos(false);
+    }
+  }
+
+  function toggleVideo(video: GameVideo) {
+    const hasVideo = selectedVideos.some((item) => item.youtubeId === video.youtubeId);
+    form.setFieldValue("videos", hasVideo ? selectedVideos.filter((item) => item.youtubeId !== video.youtubeId) : [...selectedVideos, video]);
+  }
+
+  function addManualVideo() {
+    const youtubeId = videoIdFromUrl(manualVideoUrl);
+    if (!youtubeId) {
+      messageApi.error("올바른 YouTube 영상 링크를 입력하세요.");
+      return;
+    }
+    if (selectedVideos.some((video) => video.youtubeId === youtubeId)) {
+      messageApi.info("이미 연결한 영상입니다.");
+      return;
+    }
+    form.setFieldValue("videos", [...selectedVideos, {
+      youtubeId,
+      url: `https://www.youtube.com/watch?v=${youtubeId}`,
+      title: "직접 추가한 YouTube 영상",
+      thumbnail: `https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg`,
+    }]);
+    setManualVideoUrl("");
   }
 
   async function saveGame(values: CollectionGame) {
@@ -343,7 +408,7 @@ export function BoardShelfApp() {
                       <Col xs={24} sm={8}><Statistic title="태그" value={collectionTags.length} suffix="개" /></Col>
                     </Row>
                   </Card><Card className="section-card recent-games-card" title="최근 등록">{recentGames.length ? <div className="recent-game-row">{recentGames.map((game) => <button type="button" key={game.id} onClick={() => viewGameDetail(game)}><Cover game={game} size="small" /><Typography.Text strong ellipsis>{game.title}</Typography.Text></button>)}</div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="최근 등록한 게임이 없습니다." />}</Card>{popularTagGroups.length ? <div className="tag-dashboard">{popularTagGroups.map(({ tag, count, games, rankedGames }) => <Card className="section-card tag-game-card" key={tag} title={<Space size={8}><Tag color="blue">{tag}</Tag><Typography.Text type="secondary">{count}개 게임 · 플레이 많은 순</Typography.Text></Space>} extra={count > 5 ? <Button type="link" onClick={() => setTagGallery({ tag, games: rankedGames, sortLabel: "평점 높은 순 · 동점 시 플레이 횟수순" })}>더보기</Button> : null}><div className="tag-game-row">{games.map((game) => <article className="tag-game-item" key={game.id}><button className="tag-game-cover" type="button" onClick={() => viewGameDetail(game)}><Cover game={game} /></button><Typography.Text strong ellipsis>{game.title}</Typography.Text><Typography.Text type="secondary">플레이 {game.plays}회</Typography.Text><Space size={3}><Rate disabled allowHalf value={game.personalRating ?? 0} /><Typography.Text type="secondary">{game.personalRating?.toFixed(1) ?? "-"}</Typography.Text></Space>{game.photos.length > 0 && <><div className="photo-preview-grid">{game.photos.slice(0, 5).map((photo) => <button type="button" key={photo.id} onClick={() => viewGameDetail(game)}><img src={photo.url} alt={photo.caption || `${game.title} 플레이 사진`} /></button>)}</div>{game.photos.length > 5 && <Button type="link" size="small" onClick={() => setPhotoGalleryGame(game)}>더보기</Button>}</>}</article>)}</div></Card>)}</div> : <Card className="section-card" title="시작하기"><Typography.Paragraph type="secondary">관리자 로그인 후 첫 보드게임을 등록하면 태그별 게임 목록이 표시됩니다.</Typography.Paragraph></Card>}</div>
-                  <div hidden={activeMenu !== "detail"}><Card className="section-card" title={viewingGame?.title ?? "게임 상세"}>{viewingGame ? <><div className="selected-game"><Cover game={viewingGame} /><div><Typography.Title level={4}>{viewingGame.title}</Typography.Title><Typography.Text type="secondary">{viewingGame.englishTitle} {viewingGame.year ? `(${viewingGame.year})` : ""}</Typography.Text><br /><Rate disabled allowHalf value={viewingGame.personalRating ?? 0} /><Typography.Text> {viewingGame.personalRating?.toFixed(1) ?? "평가 없음"}</Typography.Text></div></div><Space wrap>{viewingGame.tags.map((tag) => <Tag key={tag}>{tag}</Tag>)}</Space><Typography.Paragraph>{viewingGame.review || "등록된 한줄 리뷰가 없습니다."}</Typography.Paragraph><Typography.Text type="secondary">{viewingGame.minPlayers}-{viewingGame.maxPlayers}명 · {viewingGame.minAge}세 이상 · {viewingGame.playTime ?? "시간 미입력"} · 플레이 {viewingGame.plays}회</Typography.Text><div className="play-photo-grid">{viewingGame.photos.map((photo) => <figure key={photo.id}><img src={photo.url} alt={photo.caption || `${viewingGame.title} 플레이 사진`} /><figcaption>{photo.caption || "플레이 기록"}</figcaption></figure>)}</div></> : <Empty description="게임을 찾지 못했습니다." />}</Card></div>
+                  <div hidden={activeMenu !== "detail"}><Card className="section-card" title={viewingGame?.title ?? "게임 상세"}>{viewingGame ? <><div className="selected-game"><Cover game={viewingGame} /><div><Typography.Title level={4}>{viewingGame.title}</Typography.Title><Typography.Text type="secondary">{viewingGame.englishTitle} {viewingGame.year ? `(${viewingGame.year})` : ""}</Typography.Text><br /><Rate disabled allowHalf value={viewingGame.personalRating ?? 0} /><Typography.Text> {viewingGame.personalRating?.toFixed(1) ?? "평가 없음"}</Typography.Text></div></div><Space wrap>{viewingGame.tags.map((tag) => <Tag key={tag}>{tag}</Tag>)}</Space><Typography.Paragraph>{viewingGame.review || "등록된 한줄 리뷰가 없습니다."}</Typography.Paragraph><Typography.Text type="secondary">{viewingGame.minPlayers}-{viewingGame.maxPlayers}명 · {viewingGame.minAge}세 이상 · {viewingGame.playTime ?? "시간 미입력"} · 플레이 {viewingGame.plays}회</Typography.Text>{viewingGame.videos.length > 0 && <section className="game-video-section"><Typography.Title level={5}><YoutubeOutlined /> 관련 YouTube 영상</Typography.Title><div className="game-video-grid">{viewingGame.videos.map((video) => <a key={video.id ?? video.youtubeId} href={video.url} target="_blank" rel="noreferrer"><img src={video.thumbnail} alt="" /><span><strong>{video.title}</strong><small>{video.channelName ?? "YouTube"}</small></span></a>)}</div></section>}<div className="play-photo-grid">{viewingGame.photos.map((photo) => <figure key={photo.id}><img src={photo.url} alt={photo.caption || `${viewingGame.title} 플레이 사진`} /><figcaption>{photo.caption || "플레이 기록"}</figcaption></figure>)}</div></> : <Empty description="게임을 찾지 못했습니다." />}</Card></div>
                   <div hidden={activeMenu !== "collection"}><Card id="collection" className="section-card collection-card" title="내 보유 게임" extra={<Typography.Text type="secondary">{isAdmin ? "게임을 클릭해 수정" : "게임을 클릭해 상세 보기"}</Typography.Text>}>
                     <div className="collection-toolbar"><Input.Search value={collectionQuery} onChange={(event) => setCollectionQuery(event.target.value)} allowClear placeholder="게임명, 영문명, 태그 검색" prefix={<SearchOutlined />} /><Typography.Text type="secondary">{filteredCollection.length}개 결과</Typography.Text></div>
                     <div className="game-grid">
@@ -373,6 +438,8 @@ export function BoardShelfApp() {
                       <Form.Item name="personalRating" label="나의 평점"><Rate allowHalf /></Form.Item>
                       <Form.Item name="review" label="한줄 리뷰"><Input.TextArea rows={2} placeholder="내가 느낀 재미와 추천 이유를 남겨보세요." /></Form.Item>
                       <Form.Item name="plays" label="플레이 횟수"><InputNumber min={0} className="full-width" /></Form.Item>
+                      <Form.Item name="videos" hidden getValueProps={() => ({})}><span /></Form.Item>
+                      <div className="video-section"><div className="video-section-heading"><div><Typography.Text strong><YoutubeOutlined /> 관련 YouTube 영상</Typography.Text><Typography.Text type="secondary">등록 시 상위 3개 영상이 자동으로 선택됩니다.</Typography.Text></div><Button size="small" loading={searchingVideos} onClick={() => selected && void searchRelatedVideos(selected, false)}>영상 다시 검색</Button></div>{videoSearchError && <Alert type="info" showIcon message={videoSearchError} />}{videoCandidates.length > 0 && <div className="video-candidate-grid">{videoCandidates.map((video) => { const isSelected = selectedVideos.some((item) => item.youtubeId === video.youtubeId); return <button className={`video-candidate ${isSelected ? "selected" : ""}`} key={video.youtubeId} type="button" onClick={() => toggleVideo(video)}><img src={video.thumbnail} alt="" /><span><strong>{video.title}</strong><small>{video.channelName}</small></span><Tag color={isSelected ? "blue" : "default"}>{isSelected ? "연결됨" : "선택"}</Tag></button>; })}</div>}<Space.Compact className="manual-video-input"><Input value={manualVideoUrl} onChange={(event) => setManualVideoUrl(event.target.value)} placeholder="YouTube 영상 링크를 직접 추가" onPressEnter={addManualVideo} /><Button onClick={addManualVideo}>링크 추가</Button></Space.Compact>{selectedVideos.length > 0 && <div className="selected-video-list">{selectedVideos.map((video) => <Tag closable key={video.youtubeId} onClose={() => toggleVideo(video)}>{video.title}</Tag>)}</div>}</div>
                       {isEditingSelected && <div className="play-photo-section"><Typography.Text strong>플레이 사진</Typography.Text><Input value={photoCaption} onChange={(event) => setPhotoCaption(event.target.value)} placeholder="사진에 남길 한마디 (선택)" /><Upload.Dragger accept="image/jpeg,image/png,image/webp,image/gif" multiple={false} showUploadList={false} disabled={uploadingPhoto} beforeUpload={(file) => { void uploadPlayPhoto(file); return false; }}><p className="ant-upload-drag-icon"><InboxOutlined /></p><p className="ant-upload-text">사진을 여기로 끌어다 놓으세요</p><p className="ant-upload-hint">클릭해서 선택할 수도 있습니다. JPG, PNG, WebP, GIF 파일은 최대 10MB까지 지원합니다.</p></Upload.Dragger><div className="play-photo-grid">{(selected as CollectionGame).photos.map((photo) => <figure key={photo.id}><img src={photo.url} alt={photo.caption || `${selected.title} 플레이 사진`} /><figcaption>{photo.caption || "플레이 기록"}</figcaption><Button size="small" danger onClick={() => void deletePlayPhoto(photo.id)}>삭제</Button></figure>)}</div></div>}
                       <Space className="form-actions"><Button onClick={() => { setSelected(null); form.resetFields(); }}>취소</Button><Button type="primary" htmlType="submit" loading={loadingDetail || saving}>{isEditingSelected ? "수정 저장" : "컬렉션에 저장"}</Button></Space>
                     </Form> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={loadingDetail ? "게임 정보를 불러오는 중…" : "검색 결과에서 게임을 선택하세요."} />}

@@ -57,22 +57,23 @@ export default function OpenGraphImage() {
             right: 76,
           }}
         >
-          {["♟", "♜", "♞"].map((piece, index) => (
+          {["PLAY", "REVIEW", "SHARE"].map((label, index) => (
             <div
-              key={piece}
+              key={label}
               style={{
                 alignItems: "center",
                 background: index === 1 ? "#1677ff" : "rgba(255, 255, 255, 0.14)",
                 border: "1px solid rgba(255, 255, 255, 0.26)",
                 borderRadius: 22,
                 display: "flex",
-                fontSize: 55,
+                fontSize: 19,
+                fontWeight: 700,
                 height: 96,
                 justifyContent: "center",
                 width: 96,
               }}
             >
-              {piece}
+              {label}
             </div>
           ))}
         </div>
