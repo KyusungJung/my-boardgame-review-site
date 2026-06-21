@@ -61,6 +61,44 @@ async function fetchBoardlife(path: string) {
   return response;
 }
 
+async function getBoardlifeGameThroughReader(id: string): Promise<BoardGameMetadata> {
+  const sourceUrl = `${BOARDLIFE_BASE_URL}/game/${id}`;
+  const response = await fetch(`https://r.jina.ai/http://${sourceUrl.replace(/^https?:\/\//, "")}`, { cache: "no-store" });
+  if (!response.ok) throw new Error(`Boardlife fallback request failed (${response.status})`);
+
+  const bodyText = await response.text();
+  const titleMatches = [...bodyText.matchAll(/^# (.+?) 보드게임$/gm)];
+  const title = titleMatches.at(-1)?.[1] ?? "이름 없음";
+  const playerSection = textAfterLabel(bodyText, "인원", ["플레이 시간", "사용 연령", "credit 정보"]);
+  const playerRange = rangeFrom(playerSection);
+  const bestMatch = playerSection?.match(/베스트\s*:\s*(\d+)인/);
+  const recommendedMatch = playerSection?.match(/추천\s*:\s*([^\)\s]+)/);
+  const playTime = textAfterLabel(bodyText, "플레이 시간", ["사용 연령", "credit 정보", "링크 정보"]);
+  const ageSection = textAfterLabel(bodyText, "사용 연령", ["credit 정보", "링크 정보", "게임 설명"]);
+  const englishTitle = bodyText.match(/^## ([A-Za-z][^\n]+)$/m)?.[1] ?? "";
+  const image = bodyText.match(/https?:\/\/img\.boardlife\.co\.kr\/[^\s)]+_w300\.[a-zA-Z0-9]+/)?.[0];
+  const result: BoardGameMetadata = {
+    id,
+    title,
+    englishTitle,
+    image,
+    thumbnail: image,
+    sourceUrl,
+    minPlayers: playerRange?.min,
+    maxPlayers: playerRange?.max,
+    bestPlayers: bestMatch ? Number(bestMatch[1]) : undefined,
+    recommendedPlayers: recommendedMatch?.[1],
+    minAge: numberFrom(ageSection),
+    playTime: playTime?.slice(0, 30),
+    complexity: numberFrom(bodyText.match(/난이도\s*(\d+(?:\.\d+)?)/)?.[1]),
+    boardlifeRating: numberFrom(bodyText.match(/평점\s*(\d+(?:\.\d+)?)/)?.[1]),
+    languageDependency: bodyText.match(/언어의존도\s*([^\n]+)/)?.[1]?.slice(0, 24),
+    sourceFetchedAt: new Date().toISOString(),
+  };
+  setCached(`detail:${id}`, result, DETAIL_CACHE_TTL);
+  return result;
+}
+
 export async function searchBoardlife(word: string): Promise<BoardlifeSearchResult[]> {
   const normalizedWord = word.trim();
   if (!normalizedWord) return [];
@@ -91,8 +129,13 @@ export async function getBoardlifeGame(id: string): Promise<BoardGameMetadata> {
   const cached = getCached<BoardGameMetadata>(key);
   if (cached) return cached;
 
-  const response = await fetchBoardlife(`/game/${encodeURIComponent(id)}`);
-  const html = await response.text();
+  let html: string;
+  try {
+    const response = await fetchBoardlife(`/game/${encodeURIComponent(id)}`);
+    html = await response.text();
+  } catch {
+    return getBoardlifeGameThroughReader(id);
+  }
   const $ = cheerio.load(html);
   const title = $("h1").first().text().replace(/보드게임$/, "").trim() || "이름 없음";
   const image = $("meta[property='og:image']").attr("content") || $("img").filter((_, imageElement) => ($(imageElement).attr("src") ?? "").includes("_w300")).first().attr("src");
