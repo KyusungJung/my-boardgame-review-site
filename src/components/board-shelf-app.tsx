@@ -223,7 +223,7 @@ export function BoardShelfApp() {
       if (!response.ok) throw new Error("message" in savedGame ? savedGame.message : "저장에 실패했습니다.");
       const persistedGame = savedGame as CollectionGame;
       setCollection((current) => [persistedGame, ...current.filter((item) => item.id !== persistedGame.id)]);
-      messageApi.success(`${persistedGame.title}을(를) Neon DB에 저장했습니다.`);
+      messageApi.success(`${persistedGame.title}을(를) 저장했습니다.`);
       setSelected(null);
       setQuery("");
       form.resetFields();
