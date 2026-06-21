@@ -19,6 +19,7 @@ import {
   Menu,
   Modal,
   Rate,
+  Radio,
   Row,
   Select,
   Space,
@@ -54,6 +55,8 @@ const pageMetadata = {
   registration: { title: "게임 추가", description: "Boardlife에서 게임을 찾아 컬렉션에 등록하세요." },
   detail: { title: "게임 상세", description: "보드게임 정보와 플레이 기록을 확인하세요." },
 };
+
+const statusLabel = { owned: "보유", wishlist: "위시리스트", played: "플레이 완료" } as const;
 
 function Cover({ game, size = "regular" }: { game: Pick<BoardlifeSearchResult, "title" | "image" | "thumbnail">; size?: "small" | "regular" }) {
   const imageUrl = game.image || game.thumbnail;
@@ -344,7 +347,7 @@ export function BoardShelfApp() {
                   <div hidden={activeMenu !== "collection"}><Card id="collection" className="section-card collection-card" title="내 보유 게임" extra={<Typography.Text type="secondary">{isAdmin ? "게임을 클릭해 수정" : "게임을 클릭해 상세 보기"}</Typography.Text>}>
                     <div className="collection-toolbar"><Input.Search value={collectionQuery} onChange={(event) => setCollectionQuery(event.target.value)} allowClear placeholder="게임명, 영문명, 태그 검색" prefix={<SearchOutlined />} /><Typography.Text type="secondary">{filteredCollection.length}개 결과</Typography.Text></div>
                     <div className="game-grid">
-                      {filteredCollection.map((game) => <button className="game-item editable" key={game.id} type="button" onClick={() => openGame(game)}><Cover game={game} /><div className="game-info"><Typography.Text strong ellipsis>{game.title}</Typography.Text><Typography.Text type="secondary" className="english" ellipsis>{game.englishTitle}</Typography.Text><Space size={4}><Rate disabled allowHalf value={game.personalRating} count={1} /><Typography.Text>{game.personalRating?.toFixed(1) ?? "-"}</Typography.Text></Space><div className="game-tags">{game.tags.slice(0, 2).map((tag) => <Tag key={tag}>{tag}</Tag>)}</div><Typography.Text type="secondary">플레이 {game.plays}회</Typography.Text></div></button>)}
+                      {filteredCollection.map((game) => <button className="game-item editable" key={game.id} type="button" onClick={() => openGame(game)}><Cover game={game} /><div className="game-info"><Typography.Text strong ellipsis>{game.title}</Typography.Text><Typography.Text type="secondary" className="english" ellipsis>{game.englishTitle}</Typography.Text><Space size={4}><Rate disabled allowHalf value={game.personalRating} count={1} /><Typography.Text>{game.personalRating?.toFixed(1) ?? "-"}</Typography.Text></Space><div className="game-tags"><Tag color={game.status === "owned" ? "blue" : "default"}>{statusLabel[game.status]}</Tag>{game.tags.slice(0, 2).map((tag) => <Tag key={tag}>{tag}</Tag>)}</div><Typography.Text type="secondary">플레이 {game.plays}회</Typography.Text></div></button>)}
                     </div>
                     {!filteredCollection.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={collection.length ? "검색 결과가 없습니다." : "아직 등록한 보드게임이 없습니다."} />}
                   </Card></div>
@@ -366,6 +369,7 @@ export function BoardShelfApp() {
                       <Row gutter={10}><Col span={12}><Form.Item name="minPlayers" label="최소 인원"><InputNumber min={1} max={20} className="full-width" /></Form.Item></Col><Col span={12}><Form.Item name="maxPlayers" label="최대 인원"><InputNumber min={1} max={20} className="full-width" /></Form.Item></Col><Col span={12}><Form.Item name="bestPlayers" label="베스트 인원"><InputNumber min={1} max={20} className="full-width" /></Form.Item></Col><Col span={12}><Form.Item name="minAge" label="권장 연령"><InputNumber min={0} max={99} className="full-width" /></Form.Item></Col></Row>
                       <Row gutter={10}><Col span={12}><Form.Item name="playTime" label="플레이 시간"><Input placeholder="예: 30-45분" /></Form.Item></Col><Col span={12}><Form.Item name="complexity" label="난이도"><InputNumber min={0} max={5} step={0.1} className="full-width" /></Form.Item></Col></Row>
                       <Form.Item name="tags" label="태그"><Select mode="tags" placeholder="태그를 입력하세요" options={collectionTags.map((tag) => ({ value: tag }))} /></Form.Item>
+                      <Form.Item name="status" label="보유 상태" initialValue="owned"><Radio.Group optionType="button" buttonStyle="solid"><Radio.Button value="owned">보유</Radio.Button><Radio.Button value="wishlist">위시리스트</Radio.Button><Radio.Button value="played">플레이 완료</Radio.Button></Radio.Group></Form.Item>
                       <Form.Item name="personalRating" label="나의 평점"><Rate allowHalf /></Form.Item>
                       <Form.Item name="review" label="한줄 리뷰"><Input.TextArea rows={2} placeholder="내가 느낀 재미와 추천 이유를 남겨보세요." /></Form.Item>
                       <Form.Item name="plays" label="플레이 횟수"><InputNumber min={0} className="full-width" /></Form.Item>
