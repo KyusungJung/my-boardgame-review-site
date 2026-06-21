@@ -335,7 +335,7 @@ export function BoardShelfApp() {
             <Header className="top-header"><div className="page-heading"><Button className="mobile-nav-trigger" type="text" icon={<MenuOutlined />} aria-label="메뉴 열기" onClick={() => setMobileNavOpen(true)} /><div><Typography.Title level={2}>{currentPage.title}</Typography.Title><Typography.Text type="secondary">{currentPage.description}</Typography.Text></div></div><Avatar style={{ background: "#e6f4ff", color: "#0958d9" }}>KJ</Avatar></Header>
             <Content id="dashboard" className="content-area">
               <Row gutter={[20, 20]}>
-                {activeMenu !== "registration" && <Col xs={24} xl={activeMenu === "detail" ? 24 : 15}>
+                {activeMenu !== "registration" && <Col xs={24} xl={24}>
                   <div hidden={activeMenu !== "dashboard"}><Card className="section-card" title="컬렉션 요약">
                     <Row gutter={[12, 12]}>
                       <Col xs={24} sm={8}><Statistic title="보유 게임" value={collection.length} suffix="개" /></Col>
@@ -357,7 +357,7 @@ export function BoardShelfApp() {
                     <div className="recommendation-list">{recommendations.slice(0, 3).map((game) => <div className="recommendation-item" key={game.id}><Cover game={game} size="small" /><div><Typography.Text strong>{game.title}</Typography.Text><Typography.Paragraph type="secondary">{game.bestPlayers === people ? `${people}명일 때 가장 좋아요` : `${game.minPlayers}-${game.maxPlayers}명 플레이 가능`} · {game.playTime ?? "시간 미입력"}</Typography.Paragraph></div></div>)}{!recommendations.length && <Empty description="조건에 맞는 게임이 없어요." image={Empty.PRESENTED_IMAGE_SIMPLE} />}</div>
                   </Card></div>
                 </Col>}
-                {(activeMenu === "registration" || isAdmin) && activeMenu !== "detail" && <Col xs={24} xl={activeMenu === "registration" ? 24 : 9}>
+                {activeMenu === "registration" && <Col xs={24} xl={24}>
                   {isAdmin ? <Card id="registration" className="registration-card" title={isEditingSelected ? "게임 수정" : "게임 등록"} extra={<Tag color="blue">Boardlife</Tag>}>
                     <Typography.Paragraph type="secondary">게임명을 검색해 후보를 고른 뒤, 자동으로 채워진 정보를 확인하세요.</Typography.Paragraph>
                     <Input value={query} prefix={<SearchOutlined />} placeholder="예: 스플랜더, Splendor" onChange={(event) => setQuery(event.target.value)} suffix={searching ? "검색 중" : null} />
