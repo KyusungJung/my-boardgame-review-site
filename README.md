@@ -35,9 +35,9 @@ YouTube 관련 영상 자동 검색을 사용하려면 Google Cloud에서 **YouT
 npm run db:push
 ```
 
-5. `main`에 푸시하거나 Vercel에서 Redeploy합니다. 배포 빌드는 Prisma 마이그레이션을 실행해 필요한 테이블을 자동 생성합니다.
+5. `main`에 푸시하거나 Vercel에서 Redeploy합니다. 배포 빌드는 Prisma 스키마 동기화를 실행해 필요한 테이블을 자동 생성합니다.
 
-Vercel 빌드는 자동으로 `prisma generate`, `prisma migrate deploy` 후 Next.js를 빌드합니다. Neon에 연결하지 않은 상태에서는 공개 화면이 예시 컬렉션을 표시하고, 게임 저장 API는 실패합니다.
+Vercel 빌드는 자동으로 `prisma generate`, `prisma db push` 후 Next.js를 빌드합니다. Neon에 연결하지 않은 상태에서는 공개 화면이 예시 컬렉션을 표시하고, 게임 저장 API는 실패합니다.
 
 ## 데이터 보안
 
