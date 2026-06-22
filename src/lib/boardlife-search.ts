@@ -1,6 +1,7 @@
 import type { BoardlifeSearchResult } from "@/lib/types";
 
 const BOARDLIFE_BASE_URL = "https://boardlife.co.kr";
+const REQUEST_TIMEOUT_MS = 8_000;
 
 type BoardlifeApiItem = {
   number?: string | number;
@@ -37,13 +38,14 @@ async function fetchSearchItems(url: string) {
       "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
     },
     cache: "no-store",
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   if (!response.ok) throw new Error(`Boardlife request failed (${response.status})`);
   return (await response.json()) as BoardlifeApiItem[];
 }
 
 async function fetchSearchItemsThroughReader(boardlifeUrl: string) {
-  const response = await fetch(`https://r.jina.ai/http://${boardlifeUrl.replace(/^https?:\/\//, "")}`, { cache: "no-store" });
+  const response = await fetch(`https://r.jina.ai/http://${boardlifeUrl.replace(/^https?:\/\//, "")}`, { cache: "no-store", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
   if (!response.ok) throw new Error(`Boardlife fallback request failed (${response.status})`);
 
   const body = await response.text();

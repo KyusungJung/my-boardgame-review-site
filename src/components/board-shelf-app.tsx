@@ -109,10 +109,16 @@ export function BoardShelfApp() {
 
   useEffect(() => {
     async function loadDashboardData() {
-      const [gamesResponse, sessionResponse] = await Promise.all([fetch("/api/games"), fetch("/api/auth/session")]);
-      if (gamesResponse.ok) setCollection(await gamesResponse.json() as CollectionGame[]);
-      else setCollection([]);
-      if (sessionResponse.ok) setIsAdmin((await sessionResponse.json() as { authenticated: boolean }).authenticated);
+      try {
+        const [gamesResponse, sessionResponse] = await Promise.all([fetch("/api/games"), fetch("/api/auth/session")]);
+        const games = gamesResponse.ok ? await gamesResponse.json() as CollectionGame[] : [];
+        const session = sessionResponse.ok ? await sessionResponse.json() as { authenticated: boolean } : { authenticated: false };
+        setCollection(Array.isArray(games) ? games : []);
+        setIsAdmin(session.authenticated);
+      } catch {
+        setCollection([]);
+        setIsAdmin(false);
+      }
     }
     void loadDashboardData();
   }, []);
