@@ -11,7 +11,7 @@ type PlaylistWithGames = Playlist & {
 export function serializePlaylist(playlist: PlaylistWithGames): GamePlaylist {
   return {
     id: playlist.id,
-    shareId: playlist.shareId,
+    shareId: playlist.shareCode ?? playlist.shareId,
     title: playlist.title,
     description: playlist.description ?? undefined,
     createdAt: playlist.createdAt.toISOString(),

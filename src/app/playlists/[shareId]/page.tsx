@@ -1,5 +1,6 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { ensurePlaylistShareCode } from "@/lib/playlist-share";
 
 function gameIntroduction(game: { review: string | null; minPlayers: number | null; maxPlayers: number | null; tags: Array<{ tag: { name: string } }> }) {
   if (game.review) return game.review;
@@ -10,8 +11,8 @@ function gameIntroduction(game: { review: string | null; minPlayers: number | nu
 
 export default async function SharedPlaylistPage({ params }: { params: Promise<{ shareId: string }> }) {
   const { shareId } = await params;
-  const playlist = await prisma.playlist.findUnique({
-    where: { shareId },
+  const playlist = await prisma.playlist.findFirst({
+    where: { OR: [{ shareCode: shareId }, { shareId }] },
     include: {
       items: {
         orderBy: { position: "asc" },
@@ -20,6 +21,8 @@ export default async function SharedPlaylistPage({ params }: { params: Promise<{
     },
   });
   if (!playlist) notFound();
+  const shortShareCode = playlist.shareCode ?? await ensurePlaylistShareCode(playlist.id);
+  if (shareId !== shortShareCode) redirect(`/playlists/${shortShareCode}`);
 
   return (
     <main className="shared-playlist-page">

@@ -48,6 +48,7 @@ model Game {
 model Playlist {
   id          String         @id @default(cuid())
   shareId     String         @unique @default(cuid())
+  shareCode   String?        @unique
   title       String
   description String?
   createdAt   DateTime       @default(now())

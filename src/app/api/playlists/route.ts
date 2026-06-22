@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { serializePlaylist } from "@/lib/playlist-records";
+import { createPlaylistWithShareCode, ensurePlaylistShareCodes } from "@/lib/playlist-share";
 import { prisma } from "@/lib/prisma";
 
 const playlistInclude = {
@@ -23,6 +24,7 @@ async function resolveItems(gameIds: string[]) {
 }
 
 export async function GET() {
+  await ensurePlaylistShareCodes();
   const playlists = await prisma.playlist.findMany({ include: playlistInclude, orderBy: { updatedAt: "desc" } });
   return NextResponse.json(playlists.map(serializePlaylist));
 }
@@ -34,6 +36,6 @@ export async function POST(request: NextRequest) {
   if (!title) return NextResponse.json({ message: "플레이리스트 이름을 입력하세요." }, { status: 400 });
   const items = await resolveItems(input.gameIds ?? []);
   if (!items.length) return NextResponse.json({ message: "플레이리스트에 게임을 하나 이상 추가하세요." }, { status: 400 });
-  const playlist = await prisma.playlist.create({ data: { title, description: input.description?.trim() || null, items: { create: items } }, include: playlistInclude });
+  const playlist = await createPlaylistWithShareCode((shareCode) => prisma.playlist.create({ data: { shareCode, title, description: input.description?.trim() || null, items: { create: items } }, include: playlistInclude }));
   return NextResponse.json(serializePlaylist(playlist), { status: 201 });
 }
