@@ -75,6 +75,8 @@ body { margin: 0; color: rgba(0, 0, 0, .88); font-family: var(--font-sans); }
 .search-results { max-height: 250px; margin-top: 8px; overflow: auto; border: 1px solid var(--line); border-radius: 7px; }
 .search-results .ant-list-item { padding: 9px 12px; cursor: pointer; }
 .search-results .ant-list-item:hover { background: #f5faff; }
+.search-results .ant-list-item.already-registered { cursor: default; background: #fafafa; opacity: .72; }
+.search-results .ant-list-item.already-registered:hover { background: #fafafa; }
 .search-results .ant-list-item-meta { align-items: center; }
 .selected-game { display: flex; gap: 12px; margin-bottom: 16px; padding: 12px; border-radius: 8px; background: #f7fbff; }
 .selected-game .ant-typography { margin: 0; }

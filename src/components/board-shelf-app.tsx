@@ -200,6 +200,10 @@ export function BoardShelfApp() {
   }
 
   function chooseCandidate(candidate: BoardlifeSearchResult) {
+    if (collection.some((game) => game.id === candidate.id)) {
+      messageApi.info("이미 등록되어 있습니다.");
+      return;
+    }
     setQuery(candidate.title);
     setCandidates([]);
     startDetailTransition(async () => {
@@ -432,7 +436,7 @@ export function BoardShelfApp() {
                   {isAdmin ? <Card id="registration" className="registration-card" title={isEditingSelected ? "게임 수정" : "게임 등록"} extra={<Tag color="blue">Boardlife</Tag>}>
                     <Typography.Paragraph type="secondary">게임명을 검색해 후보를 고른 뒤, 자동으로 채워진 정보를 확인하세요.</Typography.Paragraph>
                     <Input value={query} prefix={<SearchOutlined />} placeholder="예: 스플랜더, Splendor" onChange={(event) => setQuery(event.target.value)} suffix={searching ? "검색 중" : null} />
-                    {(candidates.length > 0 || searching) && <List className="search-results" loading={searching} dataSource={candidates} renderItem={(candidate) => <List.Item onClick={() => chooseCandidate(candidate)}><List.Item.Meta avatar={<Cover game={candidate} size="small" />} title={candidate.title} description={`${candidate.englishTitle || "영문명 없음"} · ${candidate.year ?? "연도 미상"}`} /></List.Item>} />}
+                    {(candidates.length > 0 || searching) && <List className="search-results" loading={searching} dataSource={candidates} renderItem={(candidate) => { const isRegistered = collection.some((game) => game.id === candidate.id); return <List.Item className={isRegistered ? "already-registered" : undefined} onClick={isRegistered ? undefined : () => chooseCandidate(candidate)}><List.Item.Meta avatar={<Cover game={candidate} size="small" />} title={<Space size={6}><span>{candidate.title}</span>{isRegistered && <Tag color="default">이미 등록되어 있습니다</Tag>}</Space>} description={`${candidate.englishTitle || "영문명 없음"} · ${candidate.year ?? "연도 미상"}`} /></List.Item>; }} />}
                     {searchError && <Alert className="search-error" type="warning" showIcon message="Boardlife 검색을 완료하지 못했습니다." description={searchError} />}
                     <Divider />
                     {selected ? <Form form={form} layout="vertical" onFinish={saveGame} requiredMark={false}>
