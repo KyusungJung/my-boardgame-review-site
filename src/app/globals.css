@@ -39,7 +39,7 @@ body { margin: 0; color: rgba(0, 0, 0, .88); font-family: var(--font-sans); }
 .recent-game-masonry button:hover, .recent-game-masonry button:focus-visible { box-shadow: 0 5px 16px rgba(0, 21, 41, .24); outline: none; transform: translateY(-2px); }
 .recent-game-masonry button:first-child { grid-row: span 2; grid-column: span 2; }.recent-game-masonry button:nth-child(5) { grid-column: span 3; }
 .recent-game-masonry .cover { width: 100%; height: 100%; border-radius: 0; box-shadow: none; object-fit: cover; }.recent-game-masonry button::after { position: absolute; right: 0; bottom: 0; left: 0; height: 58%; background: linear-gradient(transparent, rgba(0, 21, 41, .86)); content: ""; }
-.recent-game-masonry span { position: absolute; z-index: 1; right: 8px; bottom: 8px; left: 8px; display: grid; gap: 1px; }.recent-game-masonry .ant-typography { overflow: hidden; color: #fff; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }.recent-game-masonry span .ant-typography:last-child { color: #d6e4ff; font-size: 11px; }
+.recent-game-masonry span { position: absolute; z-index: 1; right: 8px; bottom: 8px; left: 8px; }.recent-game-masonry .ant-typography { overflow: hidden; color: #fff; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .photo-preview-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); width: 100%; gap: 3px; }
 .photo-preview-grid button, .photo-gallery-grid button { padding: 0; border: 0; background: transparent; cursor: pointer; }
 .photo-preview-grid img { width: 100%; aspect-ratio: 1; border-radius: 4px; object-fit: cover; }
