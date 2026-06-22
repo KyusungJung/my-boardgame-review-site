@@ -336,7 +336,7 @@ export function BoardShelfApp() {
       setSelected(null);
       setQuery("");
       form.resetFields();
-      changePage("dashboard");
+      changePage(wasEditing ? "dashboard" : "registration");
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : "게임을 저장하지 못했습니다.");
     } finally {
