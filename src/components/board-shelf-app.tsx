@@ -38,6 +38,7 @@ import {
   LogoutOutlined,
   MenuOutlined,
   InboxOutlined,
+  OrderedListOutlined,
   PlusOutlined,
   SearchOutlined,
   ShareAltOutlined,
@@ -47,7 +48,7 @@ import {
 } from "@ant-design/icons";
 import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { upload } from "@vercel/blob/client";
-import type { BoardGameMetadata, BoardlifeSearchResult, CollectionGame, GameVideo } from "@/lib/types";
+import type { BoardGameMetadata, BoardlifeSearchResult, CollectionGame, GamePlaylist, GameVideo } from "@/lib/types";
 
 const { Header, Sider, Content } = Layout;
 const pageMetadata = {
@@ -55,6 +56,7 @@ const pageMetadata = {
   collection: { title: "게임 목록", description: "등록한 보드게임과 플레이 기록을 확인하세요." },
   tags: { title: "태그 관리", description: "컬렉션을 분류하는 태그를 확인하고 관리하세요." },
   recommend: { title: "모임 추천", description: "참가 인원과 연령에 맞는 게임을 찾아보세요." },
+  playlists: { title: "플레이리스트", description: "게임을 골라 순서를 정하고, 플레이 계획을 공유하세요." },
   registration: { title: "게임 추가", description: "Boardlife에서 게임을 찾아 컬렉션에 등록하세요." },
   detail: { title: "게임 상세", description: "보드게임 정보와 플레이 기록을 확인하세요." },
 };
@@ -119,6 +121,14 @@ export function BoardShelfApp() {
   const [searchingVideos, setSearchingVideos] = useState(false);
   const [videoSearchError, setVideoSearchError] = useState<string | null>(null);
   const [manualVideoUrl, setManualVideoUrl] = useState("");
+  const [playlists, setPlaylists] = useState<GamePlaylist[]>([]);
+  const [playlistTitle, setPlaylistTitle] = useState("");
+  const [playlistDescription, setPlaylistDescription] = useState("");
+  const [playlistQuery, setPlaylistQuery] = useState("");
+  const [playlistGameIds, setPlaylistGameIds] = useState<string[]>([]);
+  const [editingPlaylistShareId, setEditingPlaylistShareId] = useState<string | null>(null);
+  const [savingPlaylist, setSavingPlaylist] = useState(false);
+  const [draggingPlaylistGameId, setDraggingPlaylistGameId] = useState<string | null>(null);
   const [form] = Form.useForm<CollectionGame>();
   const selectedVideos = Form.useWatch("videos", form) ?? [];
   const [messageApi, messageContext] = message.useMessage();
@@ -126,14 +136,17 @@ export function BoardShelfApp() {
   useEffect(() => {
     async function loadDashboardData() {
       try {
-        const [gamesResponse, sessionResponse] = await Promise.all([fetch("/api/games"), fetch("/api/auth/session")]);
+        const [gamesResponse, sessionResponse, playlistsResponse] = await Promise.all([fetch("/api/games"), fetch("/api/auth/session"), fetch("/api/playlists")]);
         const games = gamesResponse.ok ? await gamesResponse.json() as CollectionGame[] : [];
         const session = sessionResponse.ok ? await sessionResponse.json() as { authenticated: boolean } : { authenticated: false };
+        const loadedPlaylists = playlistsResponse.ok ? await playlistsResponse.json() as GamePlaylist[] : [];
         setCollection(Array.isArray(games) ? games : []);
         setIsAdmin(session.authenticated);
+        setPlaylists(Array.isArray(loadedPlaylists) ? loadedPlaylists : []);
       } catch {
         setCollection([]);
         setIsAdmin(false);
+        setPlaylists([]);
       }
     }
     void loadDashboardData();
@@ -197,6 +210,15 @@ export function BoardShelfApp() {
     if (!normalizedQuery) return collection;
     return collection.filter((game) => [game.title, game.englishTitle, ...game.tags].some((value) => value.toLocaleLowerCase("ko").includes(normalizedQuery)));
   }, [collection, collectionQuery]);
+  const filteredPlaylistGames = useMemo(() => {
+    const normalizedQuery = playlistQuery.trim().toLocaleLowerCase("ko");
+    if (!normalizedQuery) return collection;
+    return collection.filter((game) => [game.title, game.englishTitle, ...game.tags].some((value) => value.toLocaleLowerCase("ko").includes(normalizedQuery)));
+  }, [collection, playlistQuery]);
+  const selectedPlaylistGames = useMemo(() => playlistGameIds.flatMap((id) => {
+    const game = collection.find((item) => item.id === id);
+    return game ? [game] : [];
+  }), [collection, playlistGameIds]);
   const popularTagGroups = useMemo(() => {
     const gamesByTag = new Map<string, CollectionGame[]>();
     for (const game of collection) {
@@ -421,6 +443,98 @@ export function BoardShelfApp() {
     }
   }
 
+  function startNewPlaylist() {
+    setEditingPlaylistShareId(null);
+    setPlaylistTitle("");
+    setPlaylistDescription("");
+    setPlaylistQuery("");
+    setPlaylistGameIds([]);
+    changePage("playlists");
+  }
+
+  function editPlaylist(playlist: GamePlaylist) {
+    setEditingPlaylistShareId(playlist.shareId);
+    setPlaylistTitle(playlist.title);
+    setPlaylistDescription(playlist.description ?? "");
+    setPlaylistQuery("");
+    setPlaylistGameIds(playlist.games.map((game) => game.id));
+    changePage("playlists");
+  }
+
+  function togglePlaylistGame(gameId: string) {
+    setPlaylistGameIds((current) => current.includes(gameId) ? current.filter((id) => id !== gameId) : [...current, gameId]);
+  }
+
+  function movePlaylistGame(targetGameId: string) {
+    if (!draggingPlaylistGameId || draggingPlaylistGameId === targetGameId) return;
+    setPlaylistGameIds((current) => {
+      const sourceIndex = current.indexOf(draggingPlaylistGameId);
+      const targetIndex = current.indexOf(targetGameId);
+      if (sourceIndex < 0 || targetIndex < 0) return current;
+      const reordered = [...current];
+      reordered.splice(sourceIndex, 1);
+      reordered.splice(targetIndex, 0, draggingPlaylistGameId);
+      return reordered;
+    });
+    setDraggingPlaylistGameId(null);
+  }
+
+  async function savePlaylist() {
+    const title = playlistTitle.trim();
+    if (!title) {
+      messageApi.error("플레이리스트 이름을 입력하세요.");
+      return;
+    }
+    if (!playlistGameIds.length) {
+      messageApi.error("게임을 하나 이상 선택하세요.");
+      return;
+    }
+    setSavingPlaylist(true);
+    try {
+      const response = await fetch(editingPlaylistShareId ? `/api/playlists/${editingPlaylistShareId}` : "/api/playlists", {
+        method: editingPlaylistShareId ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, description: playlistDescription, gameIds: playlistGameIds }),
+      });
+      const result = await response.json() as GamePlaylist | { message?: string };
+      if (!response.ok) throw new Error("message" in result ? result.message : "플레이리스트를 저장하지 못했습니다.");
+      const savedPlaylist = result as GamePlaylist;
+      setPlaylists((current) => [savedPlaylist, ...current.filter((playlist) => playlist.shareId !== savedPlaylist.shareId)]);
+      messageApi.success(editingPlaylistShareId ? "플레이리스트를 수정했습니다." : "플레이리스트를 만들었습니다.");
+      startNewPlaylist();
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : "플레이리스트를 저장하지 못했습니다.");
+    } finally {
+      setSavingPlaylist(false);
+    }
+  }
+
+  async function deletePlaylist(shareId: string) {
+    try {
+      const response = await fetch(`/api/playlists/${shareId}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("플레이리스트를 삭제하지 못했습니다.");
+      setPlaylists((current) => current.filter((playlist) => playlist.shareId !== shareId));
+      if (editingPlaylistShareId === shareId) startNewPlaylist();
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : "플레이리스트를 삭제하지 못했습니다.");
+    }
+  }
+
+  async function sharePlaylist(playlist: GamePlaylist) {
+    const url = `${window.location.origin}/playlists/${playlist.shareId}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: playlist.title, text: playlist.description || "보드게임 플레이리스트를 확인해 보세요.", url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      messageApi.success("플레이리스트 공유 주소를 복사했습니다.");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      messageApi.error("공유 주소를 복사하지 못했습니다.");
+    }
+  }
+
   return (
     <ConfigProvider theme={{ token: { colorPrimary: "#1677ff", borderRadius: 8, fontFamily: "var(--font-sans)" } }}>
       <App>{messageContext}
@@ -432,6 +546,7 @@ export function BoardShelfApp() {
               { key: "collection", icon: <BookOutlined />, label: "게임 목록" },
               { key: "tags", icon: <TagsOutlined />, label: "태그 관리" },
               { key: "recommend", icon: <TeamOutlined />, label: "모임 추천" },
+              { key: "playlists", icon: <OrderedListOutlined />, label: "플레이리스트" },
             ]} />
             <div className="side-bottom">{isAdmin ? <Button type="primary" block icon={<PlusOutlined />} onClick={() => changePage("registration")}>게임 추가</Button> : <Button type="primary" block icon={<LockOutlined />} onClick={() => changePage("registration")}>관리자 로그인</Button>}<Button type="text" block icon={<ShareAltOutlined />} onClick={() => void shareCollection()}>전체 컬렉션 공유</Button>{isAdmin && <Button type="text" block icon={<LogoutOutlined />} onClick={() => void logout()}>관리자 로그아웃</Button>}</div>
           </Sider>
@@ -457,6 +572,7 @@ export function BoardShelfApp() {
                   </Card></div>
                   <div hidden={activeMenu !== "tags"}><Card id="tags" className="section-card" title="내 태그" extra={<Typography.Text type="secondary">태그를 클릭해 게임 보기</Typography.Text>}><div className="tag-library">{collectionTags.map((tag) => <button className="tag-filter-button" key={tag} type="button" onClick={() => openTagGames(tag)}><Tag color="blue">{tag}</Tag></button>)}{!collectionTags.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="등록된 태그가 없습니다." />}</div></Card></div>
                   <div hidden={activeMenu !== "recommend"}><Card id="recommend" className="recommendation-card" title="모임 추천"><Typography.Paragraph type="secondary">세 가지 질문에 답하면 컬렉션의 태그와 플레이 기록을 조합해 게임 5개를 골라드립니다.</Typography.Paragraph><Steps className="recommendation-steps" current={Math.min(recommendationStep, 2)} size="small" items={[{ title: "참가 인원" }, { title: "플레이 성향" }, { title: "게임 방식" }]} /><div className="recommendation-wizard" key={recommendationStep}>{recommendationStep === 0 && <section className="recommendation-slide"><Typography.Title level={4}>몇 명이 함께하나요?</Typography.Title><Typography.Paragraph type="secondary">플레이 가능한 인원과 최연소 연령을 기준으로 먼저 걸러냅니다.</Typography.Paragraph><div className="recommendation-number-fields"><label>참가 인원<InputNumber min={1} max={12} value={people} onChange={(value) => setPeople(value ?? 1)} addonAfter="명" /></label><label>최연소 연령<InputNumber min={0} max={99} value={age} onChange={(value) => setAge(value ?? 0)} addonAfter="세" /></label></div></section>}{recommendationStep === 1 && <section className="recommendation-slide"><Typography.Title level={4}>어떤 분위기를 좋아하나요?</Typography.Title><Typography.Paragraph type="secondary">컬렉션에는 전략형 태그 게임 {recommendationProfile.strategy}개, 파티형 태그 게임 {recommendationProfile.party}개가 있습니다.</Typography.Paragraph><Radio.Group className="play-style-options" value={playStyle} onChange={(event) => setPlayStyle(event.target.value)}><Radio.Button value="strategy"><strong>전략형</strong><span>생각할 거리와 선택의 재미</span></Radio.Button><Radio.Button value="balanced"><strong>균형</strong><span>전략과 가벼움의 적당한 조합</span></Radio.Button><Radio.Button value="party"><strong>파티형</strong><span>웃음과 즉흥적인 재미</span></Radio.Button></Radio.Group></section>}{recommendationStep === 2 && <section className="recommendation-slide"><Typography.Title level={4}>좋아하는 게임 방식을 골라주세요.</Typography.Title><Typography.Paragraph type="secondary">여러 개를 선택하면 해당 형식을 적절히 섞어 추천합니다. 선택하지 않아도 성향에 맞춰 추천합니다.</Typography.Paragraph><Checkbox.Group className="mechanism-options" value={preferredMechanisms} onChange={(values) => setPreferredMechanisms(values as string[])} options={mechanismOptions.map((option) => ({ label: option.value, value: option.value }))} /></section>}{recommendationStep === 3 && <section className="recommendation-slide recommendation-result"><Typography.Title level={4}>{people}명을 위한 추천 게임 5개</Typography.Title><Typography.Paragraph type="secondary">{playStyle === "strategy" ? "전략 중심" : playStyle === "party" ? "파티 중심" : "균형 잡힌"} 성향{preferredMechanisms.length ? ` · ${preferredMechanisms.join(", ")}` : ""}을 반영했습니다.</Typography.Paragraph><div className="recommendation-list">{recommendations.map(({ game, reasons }) => <button className="recommendation-item" type="button" key={game.id} onClick={() => viewGameDetail(game)}><Cover game={game} size="small" /><span><Typography.Text strong>{game.title}</Typography.Text><Typography.Text type="secondary">{game.playTime ?? "시간 미입력"} · 플레이 {game.plays}회</Typography.Text><Space size={[3, 3]} wrap>{reasons.slice(0, 3).map((reason) => <Tag key={reason} color="blue">{reason}</Tag>)}</Space></span></button>)}</div>{!recommendations.length && <Empty description="조건에 맞는 게임이 없어요. 인원이나 연령을 조정해 보세요." image={Empty.PRESENTED_IMAGE_SIMPLE} />}</section>}</div><div className="recommendation-actions">{recommendationStep > 0 && <Button onClick={() => setRecommendationStep((step) => step - 1)}>이전</Button>}{recommendationStep < 3 ? <Button type="primary" onClick={() => setRecommendationStep((step) => step + 1)}>{recommendationStep === 2 ? "추천 게임 보기" : "다음"}</Button> : <Button onClick={() => setRecommendationStep(0)}>다시 추천하기</Button>}</div></Card></div>
+                  <div hidden={activeMenu !== "playlists"}><Card className="section-card playlist-editor-card" title={editingPlaylistShareId ? "플레이리스트 수정" : "새 플레이리스트"} extra={isAdmin ? <Button type="link" onClick={startNewPlaylist}>새로 만들기</Button> : null}>{isAdmin ? <><div className="playlist-metadata"><Input value={playlistTitle} onChange={(event) => setPlaylistTitle(event.target.value)} placeholder="플레이리스트 이름" maxLength={80} /><Input.TextArea value={playlistDescription} onChange={(event) => setPlaylistDescription(event.target.value)} placeholder="이 리스트를 만든 이유를 짧게 적어주세요." rows={2} maxLength={300} /></div><div className="playlist-builder"><section><Typography.Text strong>게임 찾기</Typography.Text><Input.Search value={playlistQuery} onChange={(event) => setPlaylistQuery(event.target.value)} allowClear placeholder="게임명, 영문명, 태그 검색" prefix={<SearchOutlined />} /><div className="playlist-game-picker">{filteredPlaylistGames.map((game) => <label key={game.id}><Checkbox checked={playlistGameIds.includes(game.id)} onChange={() => togglePlaylistGame(game.id)} /><Cover game={game} size="small" /><span><Typography.Text strong ellipsis>{game.title}</Typography.Text><Typography.Text type="secondary">{game.tags.slice(0, 2).join(" · ") || "태그 없음"}</Typography.Text></span></label>)}</div></section><section><Typography.Text strong>플레이 순서 <Typography.Text type="secondary">({selectedPlaylistGames.length}개 · 드래그로 변경)</Typography.Text></Typography.Text><div className="playlist-order-list">{selectedPlaylistGames.map((game, index) => <article draggable key={game.id} className={draggingPlaylistGameId === game.id ? "dragging" : undefined} onDragStart={() => setDraggingPlaylistGameId(game.id)} onDragEnd={() => setDraggingPlaylistGameId(null)} onDragOver={(event) => event.preventDefault()} onDrop={() => movePlaylistGame(game.id)}><span className="playlist-position">{index + 1}</span><Cover game={game} size="small" /><Typography.Text strong ellipsis>{game.title}</Typography.Text><Button type="text" danger size="small" onClick={() => togglePlaylistGame(game.id)}>제거</Button></article>)}{!selectedPlaylistGames.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="왼쪽에서 게임을 선택하세요." />}</div></section></div><div className="form-actions"><Button type="primary" loading={savingPlaylist} onClick={() => void savePlaylist}>플레이리스트 저장</Button></div></> : <Empty description="플레이리스트 작성은 관리자만 할 수 있습니다." image={Empty.PRESENTED_IMAGE_SIMPLE} />}</Card><Card className="section-card" title="내 플레이리스트" extra={<Typography.Text type="secondary">공유 링크를 만들어 보세요</Typography.Text>}><div className="playlist-library">{playlists.map((playlist) => <article key={playlist.shareId}><div><Typography.Title level={5}>{playlist.title}</Typography.Title><Typography.Paragraph type="secondary" ellipsis={{ rows: 2 }}>{playlist.description || "소개가 없습니다."}</Typography.Paragraph><Typography.Text type="secondary">게임 {playlist.games.length}개</Typography.Text></div><div className="playlist-library-games">{playlist.games.slice(0, 5).map((game) => <Cover game={game} size="small" key={game.id} />)}</div><Space wrap><Button size="small" icon={<ShareAltOutlined />} onClick={() => void sharePlaylist(playlist)}>공유</Button>{isAdmin && <Button size="small" onClick={() => editPlaylist(playlist)}>수정</Button>}{isAdmin && <Button size="small" danger onClick={() => void deletePlaylist(playlist.shareId)}>삭제</Button>}</Space></article>)}{!playlists.length && <Empty description="아직 만든 플레이리스트가 없습니다." image={Empty.PRESENTED_IMAGE_SIMPLE} />}</div></Card></div>
                 </Col>}
                 {activeMenu === "registration" && <Col xs={24} xl={24}>
                   {isAdmin ? <Card id="registration" className="registration-card" title={isEditingSelected ? "게임 수정" : "게임 등록"} extra={<Tag color="blue">Boardlife</Tag>}>
@@ -489,6 +605,7 @@ export function BoardShelfApp() {
             { key: "collection", icon: <BookOutlined />, label: "게임 목록" },
             { key: "tags", icon: <TagsOutlined />, label: "태그 관리" },
             { key: "recommend", icon: <TeamOutlined />, label: "모임 추천" },
+            { key: "playlists", icon: <OrderedListOutlined />, label: "플레이리스트" },
           ]} />
           <div className="mobile-navigation-actions">{isAdmin ? <Button type="primary" block icon={<PlusOutlined />} onClick={() => changePage("registration")}>게임 추가</Button> : <Button type="primary" block icon={<LockOutlined />} onClick={() => changePage("registration")}>관리자 로그인</Button>}<Button block icon={<ShareAltOutlined />} onClick={() => void shareCollection()}>전체 컬렉션 공유</Button>{isAdmin && <Button block icon={<LogoutOutlined />} onClick={() => void logout()}>관리자 로그아웃</Button>}</div>
         </Drawer>

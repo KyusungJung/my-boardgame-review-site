@@ -45,3 +45,13 @@ export type GameVideo = {
   publishedAt?: string;
   createdAt?: string;
 };
+
+export type GamePlaylist = {
+  id: string;
+  shareId: string;
+  title: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+  games: CollectionGame[];
+};
