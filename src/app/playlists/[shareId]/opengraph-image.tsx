@@ -18,9 +18,13 @@ async function toImageDataUrl(imageUrl?: string | null) {
       },
     });
     const mimeType = response.headers.get("content-type")?.split(";")[0] || (imageUrl.endsWith(".png") ? "image/png" : "image/jpeg");
-    if (!response.ok || !mimeType.startsWith("image/")) return undefined;
+    if (!response.ok || !mimeType.startsWith("image/")) {
+      console.warn("Unable to load playlist OG cover", { imageUrl, mimeType, status: response.status });
+      return undefined;
+    }
     return `data:${mimeType};base64,${Buffer.from(await response.arrayBuffer()).toString("base64")}`;
-  } catch {
+  } catch (error) {
+    console.warn("Unable to fetch playlist OG cover", { imageUrl, error });
     return undefined;
   }
 }
