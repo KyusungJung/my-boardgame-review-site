@@ -4,6 +4,8 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ensurePlaylistShareCode } from "@/lib/playlist-share";
 
+const OG_IMAGE_VERSION = "2";
+
 function gameIntroduction(game: { review: string | null; minPlayers: number | null; maxPlayers: number | null; tags: Array<{ tag: { name: string } }> }) {
   if (game.review) return game.review;
   const playerRange = `${game.minPlayers ?? 1}-${game.maxPlayers ?? "?"}명이`;
@@ -19,7 +21,7 @@ export async function generateMetadata({ params }: { params: Promise<{ shareId: 
   const canonicalShareId = playlist.shareCode ?? playlist.shareId;
   const title = `${playlist.title} | Board Shelf 플레이리스트`;
   const description = playlist.description || `보드게임 ${playlist._count.items}개를 순서대로 즐기는 플레이리스트입니다.`;
-  const imageUrl = `/playlists/${canonicalShareId}/opengraph-image`;
+  const imageUrl = `/playlists/${canonicalShareId}/opengraph-image?v=${OG_IMAGE_VERSION}`;
   return {
     title,
     description,
