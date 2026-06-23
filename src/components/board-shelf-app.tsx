@@ -526,10 +526,28 @@ export function BoardShelfApp() {
     window.location.assign(`/playlists/${encodeURIComponent(shareId)}`);
   }
 
+  async function copyShareUrl(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      return;
+    } catch {
+      const textArea = document.createElement("textarea");
+      textArea.value = url;
+      textArea.setAttribute("readonly", "");
+      textArea.style.position = "fixed";
+      textArea.style.opacity = "0";
+      document.body.append(textArea);
+      textArea.select();
+      const copied = document.execCommand("copy");
+      textArea.remove();
+      if (!copied) throw new Error("공유 주소를 복사하지 못했습니다.");
+    }
+  }
+
   async function sharePlaylist(playlist: GamePlaylist) {
     const url = `${window.location.origin}/playlists/${playlist.shareId}`;
     try {
-      await navigator.clipboard.writeText(url);
+      await copyShareUrl(url);
       messageApi.success("소개 페이지 주소를 복사했습니다.");
     } catch (error) {
       messageApi.error("공유 주소를 복사하지 못했습니다.");
