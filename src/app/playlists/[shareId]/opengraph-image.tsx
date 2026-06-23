@@ -3,6 +3,7 @@ import { Buffer } from "node:buffer";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
+export const preferredRegion = "icn1";
 export const alt = "Board Shelf 플레이리스트";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
