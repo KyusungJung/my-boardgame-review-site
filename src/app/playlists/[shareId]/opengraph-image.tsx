@@ -8,23 +8,30 @@ export const alt = "Board Shelf 플레이리스트";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
+function imageFetchUrl(imageUrl: string) {
+  try {
+    if (new URL(imageUrl).hostname === "img.boardlife.co.kr") {
+      return `https://external-content.duckduckgo.com/iu/?u=${encodeURIComponent(imageUrl)}&f=1&nofb=1`;
+    }
+  } catch {
+    return imageUrl;
+  }
+  return imageUrl;
+}
+
 async function toImageDataUrl(imageUrl?: string | null) {
   if (!imageUrl) return undefined;
   try {
-    const response = await fetch(imageUrl, {
+    const response = await fetch(imageFetchUrl(imageUrl), {
       headers: {
         Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
         "User-Agent": "Mozilla/5.0 (compatible; BoardShelfOG/1.0)",
       },
     });
     const mimeType = response.headers.get("content-type")?.split(";")[0] || (imageUrl.endsWith(".png") ? "image/png" : "image/jpeg");
-    if (!response.ok || !mimeType.startsWith("image/")) {
-      console.warn("Unable to load playlist OG cover", { imageUrl, mimeType, status: response.status });
-      return undefined;
-    }
+    if (!response.ok || !mimeType.startsWith("image/")) return undefined;
     return `data:${mimeType};base64,${Buffer.from(await response.arrayBuffer()).toString("base64")}`;
-  } catch (error) {
-    console.warn("Unable to fetch playlist OG cover", { imageUrl, error });
+  } catch {
     return undefined;
   }
 }
