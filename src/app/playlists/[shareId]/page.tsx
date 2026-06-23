@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ensurePlaylistShareCode } from "@/lib/playlist-share";
@@ -8,6 +9,24 @@ function gameIntroduction(game: { review: string | null; minPlayers: number | nu
   const playerRange = `${game.minPlayers ?? 1}-${game.maxPlayers ?? "?"}명이`;
   const tagNames = game.tags.slice(0, 3).map((entry) => entry.tag.name).join(" · ");
   return `${playerRange} 함께 즐기기 좋은 ${tagNames || "보드게임"}입니다.`;
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ shareId: string }> }): Promise<Metadata> {
+  const { shareId } = await params;
+  const playlist = await prisma.playlist.findFirst({ where: { OR: [{ shareCode: shareId }, { shareId }] }, select: { shareId: true, shareCode: true, title: true, description: true, _count: { select: { items: true } } } });
+  if (!playlist) return {};
+
+  const canonicalShareId = playlist.shareCode ?? playlist.shareId;
+  const title = `${playlist.title} | Board Shelf 플레이리스트`;
+  const description = playlist.description || `보드게임 ${playlist._count.items}개를 순서대로 즐기는 플레이리스트입니다.`;
+  const imageUrl = `/playlists/${canonicalShareId}/opengraph-image`;
+  return {
+    title,
+    description,
+    alternates: { canonical: `/playlists/${canonicalShareId}` },
+    openGraph: { type: "website", locale: "ko_KR", title, description, images: [{ url: imageUrl, width: 1200, height: 630, alt: `${playlist.title} 플레이리스트` }] },
+    twitter: { card: "summary_large_image", title, description, images: [imageUrl] },
+  };
 }
 
 export default async function SharedPlaylistPage({ params }: { params: Promise<{ shareId: string }> }) {

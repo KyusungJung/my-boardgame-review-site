@@ -130,6 +130,7 @@ export function BoardShelfApp() {
   const [editingPlaylistShareId, setEditingPlaylistShareId] = useState<string | null>(null);
   const [savingPlaylist, setSavingPlaylist] = useState(false);
   const [draggingPlaylistGameId, setDraggingPlaylistGameId] = useState<string | null>(null);
+  const [shareTargetPlaylist, setShareTargetPlaylist] = useState<GamePlaylist | null>(null);
   const [form] = Form.useForm<CollectionGame>();
   const selectedVideos = Form.useWatch("videos", form) ?? [];
   const [messageApi, messageContext] = message.useMessage();
@@ -544,7 +545,7 @@ export function BoardShelfApp() {
     }
   }
 
-  async function sharePlaylist(playlist: GamePlaylist) {
+  async function copyPlaylistShareUrl(playlist: GamePlaylist) {
     const url = `${window.location.origin}/playlists/${playlist.shareId}`;
     try {
       await copyShareUrl(url);
@@ -552,6 +553,32 @@ export function BoardShelfApp() {
     } catch (error) {
       messageApi.error("공유 주소를 복사하지 못했습니다.");
     }
+  }
+
+  async function sharePlaylistWithApps() {
+    if (!shareTargetPlaylist) return;
+    const playlist = shareTargetPlaylist;
+    const url = `${window.location.origin}/playlists/${playlist.shareId}`;
+    try {
+      if (!navigator.share) {
+        await copyPlaylistShareUrl(playlist);
+        messageApi.info("이 기기에서는 앱 공유를 지원하지 않아 주소를 복사했습니다.");
+        return;
+      }
+      await navigator.share({ title: playlist.title, url });
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) messageApi.error("앱 공유를 완료하지 못했습니다.");
+    } finally {
+      setShareTargetPlaylist(null);
+    }
+  }
+
+  function sharePlaylist(playlist: GamePlaylist) {
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+      setShareTargetPlaylist(playlist);
+      return;
+    }
+    void copyPlaylistShareUrl(playlist);
   }
 
   return (
@@ -630,6 +657,7 @@ export function BoardShelfApp() {
         </Drawer>
         <Modal title={photoGalleryGame ? `${photoGalleryGame.title} · 플레이 사진` : "플레이 사진"} open={Boolean(photoGalleryGame)} footer={null} onCancel={() => setPhotoGalleryGame(null)}><div className="photo-gallery-grid">{photoGalleryGame?.photos.map((photo) => <button type="button" key={photo.id} onClick={() => viewGameDetail(photoGalleryGame)}><img src={photo.url} alt={photo.caption || `${photoGalleryGame.title} 플레이 사진`} /><span>{photo.caption || "플레이 기록"}</span></button>)}</div></Modal>
         <Modal title={tagGallery ? `${tagGallery.tag} 게임` : "태그 게임"} open={Boolean(tagGallery)} footer={null} onCancel={() => setTagGallery(null)}><Typography.Paragraph type="secondary">{tagGallery?.sortLabel}</Typography.Paragraph><List dataSource={tagGallery?.games ?? []} renderItem={(game) => <List.Item className="tag-gallery-item" onClick={() => viewGameDetail(game)}><List.Item.Meta avatar={<Cover game={game} size="small" />} title={game.title} description={`평점 ${game.personalRating?.toFixed(1) ?? "-"} · 플레이 ${game.plays}회`} /></List.Item>} /></Modal>
+        <Modal title="플레이리스트 공유" open={Boolean(shareTargetPlaylist)} footer={null} onCancel={() => setShareTargetPlaylist(null)}><Typography.Paragraph type="secondary">카카오톡이 설치된 모바일 기기에서는 앱 공유를 누른 뒤 카카오톡을 선택할 수 있습니다.</Typography.Paragraph><Space direction="vertical" size={10} style={{ display: "flex" }}><Button block type="primary" onClick={() => void sharePlaylistWithApps()}>카카오톡 등 앱으로 공유</Button><Button block onClick={() => { if (shareTargetPlaylist) void copyPlaylistShareUrl(shareTargetPlaylist); setShareTargetPlaylist(null); }}>공유 주소 복사</Button></Space></Modal>
       </App>
     </ConfigProvider>
   );
