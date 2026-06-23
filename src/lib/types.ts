@@ -18,6 +18,7 @@ export type BoardGameMetadata = BoardlifeSearchResult & {
   complexity?: number;
   boardlifeRating?: number;
   languageDependency?: string;
+  description?: string;
   autoTags?: string[];
   sourceFetchedAt: string;
 };

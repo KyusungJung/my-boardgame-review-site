@@ -41,12 +41,6 @@ body { margin: 0; color: rgba(0, 0, 0, .88); font-family: var(--font-sans); }
 .recent-game-masonry button:first-child { grid-row: span 2; grid-column: span 2; }.recent-game-masonry button:nth-child(5) { grid-column: span 3; }
 .recent-game-masonry .cover { width: 100%; height: 100%; border-radius: 0; box-shadow: none; object-fit: cover; }.recent-game-masonry button::after { position: absolute; right: 0; bottom: 0; left: 0; height: 58%; background: linear-gradient(transparent, rgba(0, 21, 41, .86)); content: ""; }
 .recent-game-masonry span { position: absolute; z-index: 1; right: 8px; bottom: 8px; left: 8px; }.recent-game-masonry .ant-typography { overflow: hidden; color: #fff; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.photo-preview-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); width: 100%; gap: 3px; }
-.photo-preview-grid button, .photo-gallery-grid button { padding: 0; border: 0; background: transparent; cursor: pointer; }
-.photo-preview-grid img { width: 100%; aspect-ratio: 1; border-radius: 4px; object-fit: cover; }
-.photo-gallery-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.photo-gallery-grid img { width: 100%; aspect-ratio: 1; border-radius: 6px; object-fit: cover; }
-.photo-gallery-grid span { display: block; overflow: hidden; margin-top: 4px; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .game-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .game-item { display: flex; min-width: 0; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: inherit; font: inherit; text-align: left; }
 .game-item:disabled { cursor: default; }
@@ -89,6 +83,7 @@ body { margin: 0; color: rgba(0, 0, 0, .88); font-family: var(--font-sans); }
 .play-photo-grid figure { display: grid; gap: 5px; margin: 0; }
 .play-photo-grid img { width: 100%; aspect-ratio: 1; border-radius: 7px; object-fit: cover; }
 .play-photo-grid figcaption { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.game-description { margin-top: 18px; padding: 16px; border-left: 3px solid #91caff; border-radius: 0 8px 8px 0; background: #fafcff; }.game-description .ant-typography-h5 { margin: 0 0 8px; }.game-description .ant-typography { margin-bottom: 0; white-space: pre-wrap; }
 .personal-review-panel { display: grid; gap: 10px; margin-top: 16px; padding: 16px; border: 1px solid #b7d5ff; border-radius: 8px; background: linear-gradient(135deg, #f7fbff 0%, #eef6ff 100%); }
 .personal-review-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }.personal-review-heading > div:first-child { display: grid; gap: 2px; }.personal-review-heading .ant-typography-secondary { font-size: 12px; }.personal-rating { display: flex; flex: none; align-items: center; gap: 6px; }.personal-rating .ant-rate { color: #faad14; }
 .personal-review-panel .ant-typography-paragraph { margin: 0; white-space: pre-wrap; }.game-metadata { margin-top: 12px; }
