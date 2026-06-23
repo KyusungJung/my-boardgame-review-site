@@ -1,10 +1,23 @@
 import { ImageResponse } from "next/og";
+import { Buffer } from "node:buffer";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 export const alt = "Board Shelf 플레이리스트";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
+
+async function toImageDataUrl(imageUrl?: string | null) {
+  if (!imageUrl) return undefined;
+  try {
+    const response = await fetch(imageUrl);
+    if (!response.ok) return undefined;
+    const mimeType = response.headers.get("content-type")?.split(";")[0] || (imageUrl.endsWith(".png") ? "image/png" : "image/jpeg");
+    return `data:${mimeType};base64,${Buffer.from(await response.arrayBuffer()).toString("base64")}`;
+  } catch {
+    return undefined;
+  }
+}
 
 export default async function PlaylistOpenGraphImage({ params }: { params: Promise<{ shareId: string }> }) {
   const { shareId } = await params;
@@ -13,7 +26,7 @@ export default async function PlaylistOpenGraphImage({ params }: { params: Promi
     include: { items: { orderBy: { position: "asc" }, take: 5, include: { game: { select: { title: true, image: true } } } } },
   });
 
-  const gameImages = playlist?.items.map((item) => item.game) ?? [];
+  const gameImages = await Promise.all((playlist?.items.map(async (item) => ({ title: item.game.title, image: await toImageDataUrl(item.game.image) })) ?? []));
   return new ImageResponse(
     (
       <div style={{ alignItems: "center", background: "linear-gradient(135deg, #001529 0%, #0958d9 100%)", color: "white", display: "flex", height: "100%", overflow: "hidden", padding: "56px 64px", position: "relative", width: "100%" }}>
