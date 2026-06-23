@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ensurePlaylistShareCode } from "@/lib/playlist-share";
@@ -27,6 +28,7 @@ export default async function SharedPlaylistPage({ params }: { params: Promise<{
   return (
     <main className="shared-playlist-page">
       <section className="shared-playlist-header">
+        <Link className="shared-playlist-home" href="/">← 홈으로</Link>
         <span>Board Shelf 플레이리스트</span>
         <h1>{playlist.title}</h1>
         {playlist.description && <p>{playlist.description}</p>}

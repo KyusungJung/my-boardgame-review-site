@@ -529,14 +529,9 @@ export function BoardShelfApp() {
   async function sharePlaylist(playlist: GamePlaylist) {
     const url = `${window.location.origin}/playlists/${playlist.shareId}`;
     try {
-      if (navigator.share) {
-        await navigator.share({ title: playlist.title, text: playlist.description || "보드게임 플레이리스트를 확인해 보세요.", url });
-        return;
-      }
       await navigator.clipboard.writeText(url);
-      messageApi.success("플레이리스트 공유 주소를 복사했습니다.");
+      messageApi.success("소개 페이지 주소를 복사했습니다.");
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
       messageApi.error("공유 주소를 복사하지 못했습니다.");
     }
   }
