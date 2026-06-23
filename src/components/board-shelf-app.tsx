@@ -574,7 +574,10 @@ export function BoardShelfApp() {
   }
 
   function sharePlaylist(playlist: GamePlaylist) {
-    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    const isMobileViewport = window.matchMedia("(max-width: 767px)").matches;
+    const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    if (isMobileDevice || isMobileViewport) {
       setShareTargetPlaylist(playlist);
       return;
     }
