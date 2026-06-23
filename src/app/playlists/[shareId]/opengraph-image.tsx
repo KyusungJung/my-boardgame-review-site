@@ -10,9 +10,14 @@ export const contentType = "image/png";
 async function toImageDataUrl(imageUrl?: string | null) {
   if (!imageUrl) return undefined;
   try {
-    const response = await fetch(imageUrl);
-    if (!response.ok) return undefined;
+    const response = await fetch(imageUrl, {
+      headers: {
+        Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "User-Agent": "Mozilla/5.0 (compatible; BoardShelfOG/1.0)",
+      },
+    });
     const mimeType = response.headers.get("content-type")?.split(";")[0] || (imageUrl.endsWith(".png") ? "image/png" : "image/jpeg");
+    if (!response.ok || !mimeType.startsWith("image/")) return undefined;
     return `data:${mimeType};base64,${Buffer.from(await response.arrayBuffer()).toString("base64")}`;
   } catch {
     return undefined;
