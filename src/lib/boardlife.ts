@@ -53,9 +53,43 @@ function uniqueTags(tags: string[]) {
 }
 
 function gameDescriptionFromText(bodyText: string) {
-  return textAfterLabel(bodyText, "게임 설명", ["핵심 전략", "게임 정보", "비슷한 게임", "댓글", "추천 게임", "리뷰"])
+  const description = textAfterLabel(bodyText, "게임 설명", ["+ 더보기", "관련 게임", "카테고리", "테마", "진행방식", "그룹", "게임 정보", "비슷한 게임", "댓글", "추천 게임", "리뷰"])
     ?.replace(/^[:\-]\s*/, "")
-    .slice(0, 1500);
+    .trim();
+
+  return description && description !== "설명글" ? description.slice(0, 1500) : undefined;
+}
+
+function gameDescriptionFromReaderText(markdown: string) {
+  const lines = markdown.split(/\r?\n/).map((line) => line.trim());
+  const descriptionStart = lines.findIndex((line) => line === "게임 설명");
+  if (descriptionStart === -1) return undefined;
+
+  const descriptionLines: string[] = [];
+  for (let index = descriptionStart + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!line) continue;
+    if (
+      line === "+ 더보기" ||
+      /^\[평가\b/.test(line) ||
+      /^\[관련 게임\]/.test(line) ||
+      /^\[정보\]/.test(line) ||
+      ["카테고리", "테마", "진행방식", "그룹"].includes(line)
+    ) {
+      break;
+    }
+    if (/^\[설명글\]\(https?:\/\/[^)]+\)$/.test(line)) continue;
+    descriptionLines.push(line);
+  }
+
+  const description = descriptionLines
+    .join(" ")
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return description.length >= 20 ? description.slice(0, 1500) : undefined;
 }
 
 function readerTags(bodyText: string) {
@@ -107,7 +141,7 @@ async function getBoardlifeGameThroughReader(id: string): Promise<BoardGameMetad
     complexity: numberFrom(bodyText.match(/난이도\s*(\d+(?:\.\d+)?)/)?.[1]),
     boardlifeRating: numberFrom(bodyText.match(/평점\s*(\d+(?:\.\d+)?)/)?.[1]),
     languageDependency: bodyText.match(/언어의존도\s*([^\n]+)/)?.[1]?.slice(0, 24),
-    description: gameDescriptionFromText(bodyText),
+    description: gameDescriptionFromReaderText(bodyText),
     autoTags: readerTags(bodyText),
     sourceFetchedAt: new Date().toISOString(),
   };
