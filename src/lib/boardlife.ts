@@ -92,6 +92,23 @@ function gameDescriptionFromReaderText(markdown: string) {
   return description.length >= 20 ? description.slice(0, 1500) : undefined;
 }
 
+function metadataSummaryDescription({
+  title,
+  englishTitle,
+  minPlayers,
+  maxPlayers,
+  minAge,
+  playTime,
+  complexity,
+}: Pick<BoardGameMetadata, "title" | "englishTitle" | "minPlayers" | "maxPlayers" | "minAge" | "playTime" | "complexity">) {
+  const titleWithEnglish = englishTitle ? `${title}(${englishTitle})` : title;
+  const players = minPlayers && maxPlayers ? `${minPlayers}-${maxPlayers}명` : "여러 명";
+  const age = minAge ? `, ${minAge}세 이상` : "";
+  const duration = playTime ? ` ${playTime} 동안` : "";
+  const difficulty = complexity ? ` 난이도는 ${complexity.toFixed(2)}점입니다.` : "";
+  return `${titleWithEnglish}은(는) Boardlife 등록 정보 기준 ${players}${age}이${duration} 즐길 수 있는 보드게임입니다.${difficulty}`;
+}
+
 function readerTags(bodyText: string) {
   return uniqueTags([...bodyText.matchAll(/\[([^\]]+)\]\(https?:\/\/boardlife\.co\.kr\/info\/(?:type|category|mechanisms)\/\d+\)/g)].map((match) => match[1]));
 }
@@ -141,7 +158,15 @@ async function getBoardlifeGameThroughReader(id: string): Promise<BoardGameMetad
     complexity: numberFrom(bodyText.match(/난이도\s*(\d+(?:\.\d+)?)/)?.[1]),
     boardlifeRating: numberFrom(bodyText.match(/평점\s*(\d+(?:\.\d+)?)/)?.[1]),
     languageDependency: bodyText.match(/언어의존도\s*([^\n]+)/)?.[1]?.slice(0, 24),
-    description: gameDescriptionFromReaderText(bodyText),
+    description: gameDescriptionFromReaderText(bodyText) ?? metadataSummaryDescription({
+      title,
+      englishTitle,
+      minPlayers: playerRange?.min,
+      maxPlayers: playerRange?.max,
+      minAge: numberFrom(ageSection),
+      playTime: playTime?.slice(0, 30),
+      complexity: numberFrom(bodyText.match(/난이도\s*(\d+(?:\.\d+)?)/)?.[1]),
+    }),
     autoTags: readerTags(bodyText),
     sourceFetchedAt: new Date().toISOString(),
   };
@@ -201,7 +226,7 @@ export async function getBoardlifeGame(id: string): Promise<BoardGameMetadata> {
   const ratingMatch = metadataText.match(/게임평점\s*(\d+(?:\.\d+)?)점/);
   const complexityMatch = metadataText.match(/난이도\s*(\d+(?:\.\d+)?)\s*점/);
   const languageDependency = textAfterLabel(bodyText, "언어의존도", ["편집", "주요 정보", "인원"]);
-  const description = gameDescriptionFromText(bodyText);
+  const description = gameDescriptionFromText(bodyText) ?? descriptionText.trim();
   const headingTexts = $("h1, h2, h3").map((_, element) => $(element).text().trim()).get();
   const englishTitle = headingTexts.find((heading) => /[A-Za-z]{3,}/.test(heading) && heading !== title) ?? "";
   const autoTags = uniqueTags($("a").filter((_, element) => /\/info\/(type|category|mechanisms)\/\d+/.test($(element).attr("href") ?? "")).map((_, element) => $(element).text()).get());
@@ -222,7 +247,15 @@ export async function getBoardlifeGame(id: string): Promise<BoardGameMetadata> {
     complexity: complexityMatch ? Number(complexityMatch[1]) : undefined,
     boardlifeRating: ratingMatch ? Number(ratingMatch[1]) : undefined,
     languageDependency: languageDependency?.slice(0, 24),
-    description,
+    description: description || metadataSummaryDescription({
+      title,
+      englishTitle,
+      minPlayers: playerRange?.min,
+      maxPlayers: playerRange?.max,
+      minAge: numberFrom(ageSection),
+      playTime: playTime?.slice(0, 30),
+      complexity: complexityMatch ? Number(complexityMatch[1]) : undefined,
+    }),
     autoTags,
     sourceFetchedAt: new Date().toISOString(),
   };
