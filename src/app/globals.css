@@ -79,6 +79,7 @@ body { margin: 0; color: rgba(0, 0, 0, .88); font-family: var(--font-sans); }
 .mobile-navigation-actions { display: grid; gap: 8px; margin-top: 20px; }
 .play-photo-section { display: grid; gap: 8px; margin-bottom: 18px; }
 .play-photo-section .ant-typography { margin: 0; }
+.photo-file-input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 .play-photo-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .play-photo-grid figure { display: grid; gap: 5px; margin: 0; }
 .play-photo-grid img { width: 100%; aspect-ratio: 1; border-radius: 7px; object-fit: cover; }

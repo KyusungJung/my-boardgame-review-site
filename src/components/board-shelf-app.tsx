@@ -46,7 +46,7 @@ import {
   TeamOutlined,
   YoutubeOutlined,
 } from "@ant-design/icons";
-import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { upload } from "@vercel/blob/client";
 import type { BoardGameMetadata, BoardlifeSearchResult, CollectionGame, GamePlaylist, GameVideo } from "@/lib/types";
 
@@ -75,6 +75,7 @@ const mechanismOptions = [
   { value: "협력 게임", tags: ["협력 게임"] },
   { value: "카드 게임", tags: ["카드 게임", "핸드 관리"] },
 ];
+const PLAYLIST_SHARE_PREVIEW_VERSION = "3";
 
 function Cover({ game, size = "regular" }: { game: Pick<BoardlifeSearchResult, "title" | "image" | "thumbnail">; size?: "small" | "regular" }) {
   const imageUrl = game.image || game.thumbnail;
@@ -118,6 +119,8 @@ export function BoardShelfApp() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [photoCaption, setPhotoCaption] = useState("");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoUploadQueue = useRef(Promise.resolve());
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const [videoCandidates, setVideoCandidates] = useState<GameVideo[]>([]);
   const [searchingVideos, setSearchingVideos] = useState(false);
   const [videoSearchError, setVideoSearchError] = useState<string | null>(null);
@@ -320,16 +323,17 @@ export function BoardShelfApp() {
 
   async function uploadPlayPhoto(file?: File) {
     if (!file || !selected || !isEditingSelected) return;
+    const gameId = selected.id;
     setUploadingPhoto(true);
     try {
       if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) throw new Error("10MB 이하의 JPG, PNG, WebP, GIF 파일만 업로드할 수 있습니다.");
-      const blob = await upload(`game-photos/${selected.id}/${file.name}`, file, { access: "public", handleUploadUrl: "/api/blob/upload" });
-      const response = await fetch(`/api/games/${selected.id}/photos`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: blob.url, pathname: blob.pathname, caption: photoCaption }) });
+      const pathname = `game-photos/${gameId}/${Date.now()}-${Math.random().toString(36).slice(2)}-${file.name}`;
+      const blob = await upload(pathname, file, { access: "public", handleUploadUrl: "/api/blob/upload" });
+      const response = await fetch(`/api/games/${gameId}/photos`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: blob.url, pathname: blob.pathname, caption: photoCaption }) });
       const photo = await response.json();
       if (!response.ok) throw new Error(photo.message ?? "사진을 업로드하지 못했습니다.");
-      const updated = { ...(selected as CollectionGame), photos: [photo, ...(selected as CollectionGame).photos] };
-      setSelected(updated);
-      setCollection((current) => current.map((game) => game.id === updated.id ? updated : game));
+      setSelected((current) => current?.id === gameId ? { ...(current as CollectionGame), photos: [photo, ...(current as CollectionGame).photos] } : current);
+      setCollection((current) => current.map((game) => game.id === gameId ? { ...game, photos: [photo, ...game.photos] } : game));
       setPhotoCaption("");
       messageApi.success("플레이 사진을 추가했습니다.");
     } catch (error) {
@@ -337,6 +341,16 @@ export function BoardShelfApp() {
     } finally {
       setUploadingPhoto(false);
     }
+  }
+
+  function queuePlayPhotoUpload(file: File) {
+    photoUploadQueue.current = photoUploadQueue.current
+      .catch(() => undefined)
+      .then(() => uploadPlayPhoto(file));
+  }
+
+  function queuePlayPhotoUploads(files: FileList | File[]) {
+    Array.from(files).forEach((file) => queuePlayPhotoUpload(file));
   }
 
   async function deletePlayPhoto(photoId: string) {
@@ -537,6 +551,10 @@ export function BoardShelfApp() {
     window.location.assign(`/playlists/${encodeURIComponent(shareId)}`);
   }
 
+  function playlistShareUrl(shareId: string) {
+    return `${window.location.origin}/playlists/${encodeURIComponent(shareId)}?preview=${PLAYLIST_SHARE_PREVIEW_VERSION}`;
+  }
+
   async function copyShareUrl(url: string) {
     try {
       await navigator.clipboard.writeText(url);
@@ -556,7 +574,7 @@ export function BoardShelfApp() {
   }
 
   async function copyPlaylistShareUrl(playlist: GamePlaylist) {
-    const url = `${window.location.origin}/playlists/${playlist.shareId}`;
+    const url = playlistShareUrl(playlist.shareId);
     try {
       await copyShareUrl(url);
       messageApi.success("소개 페이지 주소를 복사했습니다.");
@@ -568,7 +586,7 @@ export function BoardShelfApp() {
   async function sharePlaylistWithApps() {
     if (!shareTargetPlaylist) return;
     const playlist = shareTargetPlaylist;
-    const url = `${window.location.origin}/playlists/${playlist.shareId}`;
+    const url = playlistShareUrl(playlist.shareId);
     try {
       if (!navigator.share) {
         await copyPlaylistShareUrl(playlist);
@@ -649,7 +667,7 @@ export function BoardShelfApp() {
                       <section className="personal-review-form"><div className="personal-review-form-heading"><Typography.Text strong>개인 기록</Typography.Text><Typography.Text type="secondary">공개 메타데이터와 별도로 내 평가를 남겨보세요.</Typography.Text></div><Form.Item name="personalRating" label="나의 평점"><Rate allowHalf /></Form.Item><Form.Item name="review" label="한줄 리뷰"><Input.TextArea rows={2} placeholder="내가 느낀 재미와 추천 이유를 남겨보세요." /></Form.Item><Form.Item name="plays" label="플레이 횟수"><InputNumber min={0} className="full-width" /></Form.Item></section>
                       <Form.Item name="videos" hidden getValueProps={() => ({})}><span /></Form.Item>
                       <div className="video-section"><div className="video-section-heading"><div><Typography.Text strong><YoutubeOutlined /> 관련 YouTube 영상</Typography.Text><Typography.Text type="secondary">등록 시 상위 3개 영상이 자동으로 선택됩니다.</Typography.Text></div><Button size="small" loading={searchingVideos} onClick={() => selected && void searchRelatedVideos(selected, false)}>영상 다시 검색</Button></div>{videoSearchError && <Alert type="info" showIcon message={videoSearchError} />}{videoCandidates.length > 0 && <div className="video-candidate-grid">{videoCandidates.map((video) => { const isSelected = selectedVideos.some((item) => item.youtubeId === video.youtubeId); return <button className={`video-candidate ${isSelected ? "selected" : ""}`} key={video.youtubeId} type="button" onClick={() => toggleVideo(video)}><img src={video.thumbnail} alt="" /><span><strong>{video.title}</strong><small>{video.channelName}</small></span><Tag color={isSelected ? "blue" : "default"}>{isSelected ? "연결됨" : "선택"}</Tag></button>; })}</div>}{!searchingVideos && !videoSearchError && videoCandidates.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="검색된 YouTube 영상이 없습니다. 다른 영상 링크를 직접 추가할 수 있습니다." />}<Space.Compact className="manual-video-input"><Input value={manualVideoUrl} onChange={(event) => setManualVideoUrl(event.target.value)} placeholder="YouTube 영상 링크를 직접 추가" onPressEnter={addManualVideo} /><Button onClick={addManualVideo}>링크 추가</Button></Space.Compact>{selectedVideos.length > 0 && <div className="selected-video-list">{selectedVideos.map((video) => <Tag closable key={video.youtubeId} onClose={() => toggleVideo(video)}>{video.title}</Tag>)}</div>}</div>
-                      {isEditingSelected && <div className="play-photo-section"><Typography.Text strong>플레이 사진</Typography.Text><Input value={photoCaption} onChange={(event) => setPhotoCaption(event.target.value)} placeholder="사진에 남길 한마디 (선택)" /><Upload.Dragger accept="image/jpeg,image/png,image/webp,image/gif" multiple={false} showUploadList={false} disabled={uploadingPhoto} beforeUpload={(file) => { void uploadPlayPhoto(file); return false; }}><p className="ant-upload-drag-icon"><InboxOutlined /></p><p className="ant-upload-text">사진을 여기로 끌어다 놓으세요</p><p className="ant-upload-hint">클릭해서 선택할 수도 있습니다. JPG, PNG, WebP, GIF 파일은 최대 10MB까지 지원합니다.</p></Upload.Dragger><div className="play-photo-grid">{(selected as CollectionGame).photos.map((photo) => <figure key={photo.id}><img src={photo.url} alt={photo.caption || `${selected.title} 플레이 사진`} /><figcaption>{photo.caption || "플레이 기록"}</figcaption><Button size="small" danger onClick={() => void deletePlayPhoto(photo.id)}>삭제</Button></figure>)}</div></div>}
+                      {isEditingSelected && <div className="play-photo-section"><Typography.Text strong>플레이 사진</Typography.Text><Input value={photoCaption} onChange={(event) => setPhotoCaption(event.target.value)} placeholder="사진에 남길 한마디 (선택)" /><input ref={photoInputRef} className="photo-file-input" type="file" accept="image/*" multiple onChange={(event) => { if (event.currentTarget.files) queuePlayPhotoUploads(event.currentTarget.files); event.currentTarget.value = ""; }} /><Button onClick={() => photoInputRef.current?.click()} disabled={uploadingPhoto}>사진 여러 장 선택</Button><Upload.Dragger accept="image/*" multiple={true} openFileDialogOnClick={false} showUploadList={false} disabled={uploadingPhoto} beforeUpload={(file) => { queuePlayPhotoUpload(file); return false; }}><p className="ant-upload-drag-icon"><InboxOutlined /></p><p className="ant-upload-text">사진을 여러 장 끌어다 놓으세요</p><p className="ant-upload-hint">iOS에서는 ‘사진 여러 장 선택’을 누른 뒤 사진 보관함에서 여러 장을 고르세요. 사진은 순서대로 저장되며 각 파일은 최대 10MB까지 지원합니다.</p></Upload.Dragger><div className="play-photo-grid">{(selected as CollectionGame).photos.map((photo) => <figure key={photo.id}><img src={photo.url} alt={photo.caption || `${selected.title} 플레이 사진`} /><figcaption>{photo.caption || "플레이 기록"}</figcaption><Button size="small" danger onClick={() => void deletePlayPhoto(photo.id)}>삭제</Button></figure>)}</div></div>}
                       <Space className="form-actions"><Button onClick={() => { setSelected(null); form.resetFields(); }}>취소</Button><Button type="primary" htmlType="submit" loading={loadingDetail || saving}>{isEditingSelected ? "수정 저장" : "컬렉션에 저장"}</Button></Space>
                     </Form> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={loadingDetail ? "게임 정보를 불러오는 중…" : "검색 결과에서 게임을 선택하세요."} />}
                   </Card> : <Card id="registration" className="registration-card" title="관리자 로그인" extra={<LockOutlined />}><Typography.Paragraph type="secondary">컬렉션은 누구나 볼 수 있지만, 등록과 수정은 관리자만 할 수 있습니다.</Typography.Paragraph><Input.Password value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} onPressEnter={() => void login()} placeholder="관리자 비밀번호" /><Button type="primary" block loading={loggingIn} onClick={() => void login()} style={{ marginTop: 12 }}>관리자 로그인</Button></Card>}
