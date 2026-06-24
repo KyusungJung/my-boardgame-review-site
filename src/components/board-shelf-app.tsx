@@ -55,7 +55,7 @@ import type { BoardGameMetadata, BoardlifeSearchResult, CollectionGame, GamePlay
 
 const { Header, Sider, Content } = Layout;
 const pageMetadata = {
-  dashboard: { title: "대시보드", description: "내 보드게임 컬렉션 현황을 한눈에 관리하세요." },
+  dashboard: { title: "홈", description: "내 컬렉션에서 오늘 꺼낼 게임을 찾아보세요." },
   collection: { title: "게임 목록", description: "등록한 보드게임과 플레이 기록을 확인하세요." },
   tags: { title: "태그 관리", description: "컬렉션을 분류하는 태그를 확인하고 관리하세요." },
   recommend: { title: "모임 추천", description: "참가 인원과 취향에 맞는 게임을 찾아보세요." },
@@ -83,6 +83,14 @@ const PLAYLIST_SHARE_PREVIEW_VERSION = "3";
 function Cover({ game, size = "regular" }: { game: Pick<BoardlifeSearchResult, "title" | "image" | "thumbnail">; size?: "small" | "regular" }) {
   const imageUrl = game.image || game.thumbnail;
   return imageUrl ? <img className={`cover ${size}`} src={imageUrl} alt={`${game.title} 표지`} /> : <div className={`cover ${size} cover-fallback`} aria-label={`${game.title} 표지 없음`}>{game.title.slice(0, 2)}</div>;
+}
+
+function HomeGameRail({ title, games, onGame, onMore }: { title: string; games: CollectionGame[]; onGame: (game: CollectionGame) => void; onMore: () => void }) {
+  return <section className="home-rail"><div className="home-rail-heading"><Typography.Title level={4}>{title}</Typography.Title><Button type="link" onClick={onMore}>더보기</Button></div><div className="home-game-rail">{games.map((game) => <button type="button" className="home-game-card" key={game.id} onClick={() => onGame(game)}><Cover game={game} /><span>{game.title}</span></button>)}</div></section>;
+}
+
+function HomeTagRail({ groups, onTag }: { groups: Array<{ tag: string; games: CollectionGame[]; rankedGames: CollectionGame[] }>; onTag: (tag: string, games: CollectionGame[]) => void }) {
+  return <section className="home-rail"><div className="home-rail-heading"><Typography.Title level={4}>태그별 추천</Typography.Title><Button type="link" onClick={() => onTag(groups[0]?.tag ?? "", groups[0]?.rankedGames ?? [])}>더보기</Button></div><div className="home-tag-rail">{groups.map(({ tag, games, rankedGames }) => <button type="button" key={tag} onClick={() => onTag(tag, rankedGames)}><Cover game={games[0] ?? { title: tag }} /><span>{tag}</span></button>)}</div></section>;
 }
 
 function videoIdFromUrl(value: string) {
@@ -213,10 +221,13 @@ export function BoardShelfApp() {
     .slice(0, 5), [collection, familyGameOnly, people, playStyle, preferredMechanisms]);
 
   const collectionTags = useMemo(() => [...new Set(collection.flatMap((game) => game.tags))].toSorted(), [collection]);
-  const recentGames = useMemo(() => collection.toSorted((first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime()).slice(0, 5), [collection]);
+  const recentGames = useMemo(() => collection.toSorted((first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime()).slice(0, 8), [collection]);
   const updatedGames = useMemo(() => collection
     .filter((game) => new Date(game.updatedAt).getTime() - new Date(game.createdAt).getTime() > 1000)
     .toSorted((first, second) => new Date(second.updatedAt).getTime() - new Date(first.updatedAt).getTime())
+    .slice(0, 8), [collection]);
+  const mostPlayedGames = useMemo(() => collection
+    .toSorted((first, second) => second.plays - first.plays || (second.personalRating ?? 0) - (first.personalRating ?? 0))
     .slice(0, 8), [collection]);
   const filteredCollection = useMemo(() => {
     const normalizedQuery = collectionQuery.trim().toLocaleLowerCase("ko");
@@ -252,6 +263,8 @@ export function BoardShelfApp() {
   }, [collection]);
 
   const isEditingSelected = selected ? collection.some((game) => game.id === selected.id) : false;
+  const isHome = activeMenu === "dashboard";
+  const featuredGame = updatedGames[0] ?? recentGames[0] ?? mostPlayedGames[0];
   const currentPage = activeMenu === "registration" && isEditingSelected
     ? { title: "게임 수정", description: "등록한 보드게임 정보를 수정하세요." }
     : pageMetadata[activeMenu as keyof typeof pageMetadata] ?? pageMetadata.dashboard;
@@ -636,8 +649,8 @@ export function BoardShelfApp() {
   return (
     <ConfigProvider theme={{ token: { colorPrimary: "#1677ff", borderRadius: 8, fontFamily: "var(--font-sans)" } }}>
       <App>{messageContext}
-        <Layout className="app-shell">
-          <Sider width={236} trigger={null} className="side-nav">
+        <Layout className={`app-shell${isHome ? " home-shell" : ""}`}>
+          {!isHome && <Sider width={236} trigger={null} className="side-nav">
             <div className="brand">Board <span>Shelf</span></div>
             <Menu theme="dark" mode="inline" selectedKeys={[activeMenu]} onClick={({ key }) => changePage(key)} items={[
               { key: "dashboard", icon: <DashboardOutlined />, label: "대시보드" },
@@ -647,13 +660,20 @@ export function BoardShelfApp() {
               { key: "playlists", icon: <OrderedListOutlined />, label: "플레이리스트" },
             ]} />
             <div className="side-bottom">{isAdmin ? <Button type="primary" block icon={<PlusOutlined />} onClick={() => changePage("registration")}>게임 추가</Button> : <Button type="primary" block icon={<LockOutlined />} onClick={() => changePage("registration")}>관리자 로그인</Button>}<Button type="text" block icon={<ShareAltOutlined />} onClick={() => void shareCollection()}>전체 컬렉션 공유</Button>{isAdmin && <Button type="text" block icon={<LogoutOutlined />} onClick={() => void logout()}>관리자 로그아웃</Button>}</div>
-          </Sider>
+          </Sider>}
           <Layout>
-            <Header className="top-header"><div className="page-heading"><Button className="mobile-nav-trigger" type="text" icon={<MenuOutlined />} aria-label="메뉴 열기" onClick={() => setMobileNavOpen(true)} /><div><Typography.Title level={2}>{currentPage.title}</Typography.Title><Typography.Text type="secondary">{currentPage.description}</Typography.Text></div></div><Avatar style={{ background: "#e6f4ff", color: "#0958d9" }}>KJ</Avatar></Header>
-            <Content id="dashboard" className="content-area">
+            {isHome ? <Header className="home-header"><div className="home-header-start"><Button className="mobile-nav-trigger" type="text" icon={<MenuOutlined />} aria-label="메뉴 열기" onClick={() => setMobileNavOpen(true)} /><button className="home-brand" type="button" onClick={() => changePage("dashboard")}>Board <span>Shelf</span></button></div><nav className="home-navigation" aria-label="주요 메뉴"><Button type="text" className="active" onClick={() => changePage("dashboard")}>홈</Button><Button type="text" onClick={() => changePage("collection")}>게임 목록</Button><Button type="text" onClick={() => changePage("recommend")}>모임 추천</Button><Button type="text" onClick={() => changePage("playlists")}>플레이리스트</Button></nav><div className="home-header-actions"><Button type="text" icon={<SearchOutlined />} aria-label="게임 검색" onClick={() => changePage("collection")} />{isAdmin ? <Button type="primary" onClick={() => changePage("registration")}>게임 추가</Button> : <Button type="primary" onClick={() => changePage("registration")}>관리자 로그인</Button>}<Avatar>KJ</Avatar></div></Header> : <Header className="top-header"><div className="page-heading"><Button className="mobile-nav-trigger" type="text" icon={<MenuOutlined />} aria-label="메뉴 열기" onClick={() => setMobileNavOpen(true)} /><div><Typography.Title level={2}>{currentPage.title}</Typography.Title><Typography.Text type="secondary">{currentPage.description}</Typography.Text></div></div><Avatar style={{ background: "#e6f4ff", color: "#0958d9" }}>KJ</Avatar></Header>}
+            <Content id="dashboard" className={isHome ? "home-content" : "content-area"}>
               <Row gutter={[20, 20]}>
                 {activeMenu !== "registration" && <Col xs={24} xl={24}>
-                  <div hidden={activeMenu !== "dashboard"}><Card className="section-card" title="컬렉션 요약">
+                  <div hidden={!isHome} className="home-page">
+                    {featuredGame ? <section className="home-hero"><div className="home-hero-copy"><Typography.Text>최근에 손본 게임</Typography.Text><Typography.Title>{featuredGame.title}</Typography.Title><Typography.Text className="home-hero-subtitle">{featuredGame.englishTitle || "내 컬렉션에서 다시 꺼내볼 게임"}</Typography.Text><Space size={8} className="home-hero-rating"><Rate disabled allowHalf value={featuredGame.personalRating ?? 0} /><Typography.Text>{featuredGame.personalRating?.toFixed(1) ?? "평가 없음"}</Typography.Text></Space><Typography.Paragraph>{featuredGame.review || featuredGame.description || "게임 정보와 플레이 기록을 확인해 보세요."}</Typography.Paragraph><Space><Button type="primary" onClick={() => viewGameDetail(featuredGame)}>상세 보기</Button>{isAdmin && <Button onClick={() => editGame(featuredGame)}>수정하기</Button>}</Space></div><div className="home-hero-media"><Cover game={featuredGame} /></div></section> : <section className="home-empty-hero"><Typography.Title>첫 보드게임을 컬렉션에 추가해 보세요.</Typography.Title><Typography.Paragraph>등록한 게임이 쌓일수록 최근 업데이트와 태그별 추천을 홈에서 바로 만날 수 있습니다.</Typography.Paragraph>{isAdmin && <Button type="primary" onClick={() => changePage("registration")}>게임 추가</Button>}</section>}
+                    {updatedGames.length > 0 && <HomeGameRail title="최근 업데이트" games={updatedGames} onGame={viewGameDetail} onMore={() => changePage("collection")} />}
+                    {recentGames.length > 0 && <HomeGameRail title="최근 등록" games={recentGames} onGame={viewGameDetail} onMore={() => changePage("collection")} />}
+                    {mostPlayedGames.length > 0 && <HomeGameRail title="가장 많이 플레이한 게임" games={mostPlayedGames} onGame={viewGameDetail} onMore={() => changePage("collection")} />}
+                    {popularTagGroups.length > 0 && <HomeTagRail groups={popularTagGroups} onTag={(tag, games) => tag && setTagGallery({ tag, games, sortLabel: "평점 높은 순 · 동점 시 플레이 횟수순" })} />}
+                  </div>
+                  <div hidden><Card className="section-card" title="컬렉션 요약">
                     <Row gutter={[12, 12]}>
                       <Col xs={24} sm={8}><Statistic title="보유 게임" value={collection.length} suffix="개" /></Col>
                       <Col xs={24} sm={8}><Statistic title="총 플레이" value={collection.reduce((sum, game) => sum + game.plays, 0)} suffix="회" /></Col>
