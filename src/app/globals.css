@@ -68,6 +68,7 @@ body { margin: 0; color: rgba(0, 0, 0, .88); font-family: var(--font-sans); }
 .search-results .ant-list-item-meta { align-items: center; }
 .selected-game { display: flex; gap: 12px; margin-bottom: 16px; padding: 12px; border-radius: 8px; background: #f7fbff; }
 .selected-game .ant-typography { margin: 0; }
+.game-detail-header { align-items: center; }.boardlife-link-button { margin-left: auto; color: #1677ff; font-size: 19px; }
 .full-width { width: 100%; }
 .form-actions { display: flex; justify-content: flex-end; width: 100%; }
 .drawer-brand { padding: 0; color: var(--navy); }
