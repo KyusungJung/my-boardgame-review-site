@@ -29,6 +29,7 @@ export function serializeGame(game: GameWithTags): CollectionGame {
     plays: game.plays,
     status: game.status.toLowerCase() as CollectionGame["status"],
     createdAt: game.createdAt.toISOString(),
+    updatedAt: game.updatedAt.toISOString(),
     photos: game.photos.map((photo) => ({ id: photo.id, url: photo.url, caption: photo.caption ?? undefined, createdAt: photo.createdAt.toISOString() })),
     videos: game.videos.map((video) => ({ id: video.id, youtubeId: video.youtubeId, url: video.url, title: video.title, thumbnail: video.thumbnail ?? undefined, channelName: video.channelName ?? undefined, publishedAt: video.publishedAt?.toISOString(), createdAt: video.createdAt.toISOString() })),
   };

@@ -30,6 +30,7 @@ export type CollectionGame = BoardGameMetadata & {
   plays: number;
   status: "owned" | "wishlist" | "played";
   createdAt: string;
+  updatedAt: string;
   photos: PlayPhoto[];
   videos: GameVideo[];
 };
