@@ -199,10 +199,10 @@ export async function searchBoardlife(word: string): Promise<BoardlifeSearchResu
   return results;
 }
 
-export async function getBoardlifeGame(id: string): Promise<BoardGameMetadata> {
+export async function getBoardlifeGame(id: string, forceRefresh = false): Promise<BoardGameMetadata> {
   const key = `detail:${id}`;
   const cached = getCached<BoardGameMetadata>(key);
-  if (cached) return cached;
+  if (cached && !forceRefresh) return cached;
 
   let html: string;
   try {

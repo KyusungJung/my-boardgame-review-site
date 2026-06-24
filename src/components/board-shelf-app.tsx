@@ -49,6 +49,7 @@ import {
 } from "@ant-design/icons";
 import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { upload } from "@vercel/blob/client";
+import { hasUsableGameDescription } from "@/lib/game-description";
 import type { BoardGameMetadata, BoardlifeSearchResult, CollectionGame, GamePlaylist, GameVideo } from "@/lib/types";
 
 const { Header, Sider, Content } = Layout;
@@ -81,11 +82,6 @@ const PLAYLIST_SHARE_PREVIEW_VERSION = "3";
 function Cover({ game, size = "regular" }: { game: Pick<BoardlifeSearchResult, "title" | "image" | "thumbnail">; size?: "small" | "regular" }) {
   const imageUrl = game.image || game.thumbnail;
   return imageUrl ? <img className={`cover ${size}`} src={imageUrl} alt={`${game.title} 표지`} /> : <div className={`cover ${size} cover-fallback`} aria-label={`${game.title} 표지 없음`}>{game.title.slice(0, 2)}</div>;
-}
-
-function hasUsableGameDescription(description?: string) {
-  if (!description?.trim()) return false;
-  return !(/\[설명글\]|\[평가\b|boardlife\.co\.kr\/game\/\d+\/rate/i.test(description));
 }
 
 function videoIdFromUrl(value: string) {
@@ -122,6 +118,7 @@ export function BoardShelfApp() {
   const [preferredMechanisms, setPreferredMechanisms] = useState<string[]>([]);
   const [tagGallery, setTagGallery] = useState<{ tag: string; games: CollectionGame[]; sortLabel: string } | null>(null);
   const [loadingGameDescription, setLoadingGameDescription] = useState(false);
+  const [refreshingGameDescription, setRefreshingGameDescription] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [photoCaption, setPhotoCaption] = useState("");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -316,13 +313,31 @@ export function BoardShelfApp() {
     if (hasUsableGameDescription(game.description)) return;
 
     setLoadingGameDescription(true);
-    void fetch(`/api/boardlife/game/${game.id}`)
-      .then(async (response) => response.ok ? response.json() as Promise<BoardGameMetadata> : null)
-      .then((metadata) => {
-        if (metadata && hasUsableGameDescription(metadata.description)) setViewingGame((current) => current?.id === game.id ? { ...current, description: metadata.description } : current);
+    void fetch(`/api/games/${game.id}/description`)
+      .then(async (response) => response.ok ? response.json() as Promise<{ description?: string | null }> : null)
+      .then((result) => {
+        if (result && hasUsableGameDescription(result.description)) setViewingGame((current) => current?.id === game.id ? { ...current, description: result.description ?? undefined } : current);
       })
       .catch(() => undefined)
       .finally(() => setLoadingGameDescription(false));
+  }
+
+  async function refreshGameDescription() {
+    if (!selected) return;
+    setRefreshingGameDescription(true);
+    try {
+      const response = await fetch(`/api/boardlife/game/${selected.id}?refresh=1`);
+      const metadata = await response.json() as BoardGameMetadata | { message?: string };
+      const description = "description" in metadata ? metadata.description : undefined;
+      if (!response.ok || !hasUsableGameDescription(description)) throw new Error("Boardlife에서 게임 설명을 찾지 못했습니다.");
+      form.setFieldValue("description", description);
+      setSelected((current) => current?.id === selected.id ? { ...current, description } : current);
+      messageApi.success("게임 설명을 새로 불러왔습니다. 수정 저장을 누르면 반영됩니다.");
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : "게임 설명을 갱신하지 못했습니다.");
+    } finally {
+      setRefreshingGameDescription(false);
+    }
   }
 
   function openTagGames(tag: string) {
@@ -668,6 +683,8 @@ export function BoardShelfApp() {
                       <Row gutter={10}><Col span={12}><Form.Item name="minPlayers" label="최소 인원"><InputNumber min={1} max={20} className="full-width" /></Form.Item></Col><Col span={12}><Form.Item name="maxPlayers" label="최대 인원"><InputNumber min={1} max={20} className="full-width" /></Form.Item></Col><Col span={12}><Form.Item name="bestPlayers" label="베스트 인원"><InputNumber min={1} max={20} className="full-width" /></Form.Item></Col><Col span={12}><Form.Item name="minAge" label="권장 연령"><InputNumber min={0} max={99} className="full-width" /></Form.Item></Col></Row>
                       <Row gutter={10}><Col span={12}><Form.Item name="playTime" label="플레이 시간"><Input placeholder="예: 30-45분" /></Form.Item></Col><Col span={12}><Form.Item name="complexity" label="난이도"><InputNumber min={0} max={5} step={0.1} className="full-width" /></Form.Item></Col></Row>
                       <Form.Item name="tags" label="태그"><Select mode="tags" placeholder="태그를 입력하세요" options={collectionTags.map((tag) => ({ value: tag }))} /></Form.Item>
+                      <Form.Item name="description" label="게임 설명" extra="직접 고쳐 쓸 수 있습니다. 갱신한 내용은 수정 저장을 눌러 반영하세요."><Input.TextArea rows={6} placeholder="게임 설명을 입력하세요." /></Form.Item>
+                      <Button className="description-refresh-button" loading={refreshingGameDescription} onClick={() => void refreshGameDescription()}>Boardlife에서 게임 설명 갱신</Button>
                       <Form.Item name="status" label="보유 상태" initialValue="owned"><Radio.Group optionType="button" buttonStyle="solid"><Radio.Button value="owned">보유</Radio.Button><Radio.Button value="wishlist">위시리스트</Radio.Button><Radio.Button value="played">플레이 완료</Radio.Button></Radio.Group></Form.Item>
                       <section className="personal-review-form"><div className="personal-review-form-heading"><Typography.Text strong>개인 기록</Typography.Text><Typography.Text type="secondary">공개 메타데이터와 별도로 내 평가를 남겨보세요.</Typography.Text></div><Form.Item name="personalRating" label="나의 평점"><Rate allowHalf /></Form.Item><Form.Item name="review" label="한줄 리뷰"><Input.TextArea rows={2} placeholder="내가 느낀 재미와 추천 이유를 남겨보세요." /></Form.Item><Form.Item name="plays" label="플레이 횟수"><InputNumber min={0} className="full-width" /></Form.Item></section>
                       <Form.Item name="videos" hidden getValueProps={() => ({})}><span /></Form.Item>
