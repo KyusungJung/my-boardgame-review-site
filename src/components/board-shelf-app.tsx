@@ -71,6 +71,11 @@ const statusLabel = { owned: "보유", wishlist: "위시리스트", played: "플
 const strategyTags = ["전략게임", "자원 승점", "엔진 빌딩", "일꾼 놓기", "덱,백,풀 빌딩", "영역 건설"];
 const partyTags = ["파티게임", "파티 게임", "운걸기", "주사위 굴림", "협력 게임", "어린이게임"];
 const familyTags = ["가족게임", "가족 게임", "어린이게임", "어린이 게임"];
+const homeTagRecommendations = [
+  { label: "파티 게임", tags: partyTags },
+  { label: "가족 게임", tags: familyTags },
+  { label: "전략 게임", tags: strategyTags },
+];
 const mechanismOptions = [
   { value: "일꾼 놓기", tags: ["일꾼 놓기"] },
   { value: "오픈 드래프팅", tags: ["오픈 드래프팅", "드래프팅"] },
@@ -98,6 +103,12 @@ function HomeTagRail({ groups, onTag }: { groups: Array<{ tag: string; games: Co
 
 function BoardlifeIcon() {
   return <img className="boardlife-favicon" src="https://boardlife.co.kr/favicon.ico" alt="" aria-hidden="true" />;
+}
+
+function estimatePlayTimeMinutes(playTime?: string) {
+  const numbers = playTime?.match(/\d+/g)?.map(Number).filter((value) => Number.isFinite(value) && value > 0) ?? [];
+  if (numbers.length >= 2) return Math.round((numbers[0] + numbers[1]) / 2);
+  return numbers[0] ?? 30;
 }
 
 function videoIdFromUrl(value: string) {
@@ -130,6 +141,9 @@ export function BoardShelfApp() {
   const [people, setPeople] = useState(4);
   const [familyGameOnly, setFamilyGameOnly] = useState(false);
   const [recommendationStep, setRecommendationStep] = useState(0);
+  const [recommendationLimitMode, setRecommendationLimitMode] = useState<"duration" | "count">("count");
+  const [recommendationDuration, setRecommendationDuration] = useState(120);
+  const [recommendationGameCount, setRecommendationGameCount] = useState(5);
   const [playStyle, setPlayStyle] = useState<"strategy" | "balanced" | "party">("balanced");
   const [preferredMechanisms, setPreferredMechanisms] = useState<string[]>([]);
   const [tagGallery, setTagGallery] = useState<{ tag: string; games: CollectionGame[]; sortLabel: string } | null>(null);
@@ -150,6 +164,7 @@ export function BoardShelfApp() {
   const [playlistGameIds, setPlaylistGameIds] = useState<string[]>([]);
   const [editingPlaylistShareId, setEditingPlaylistShareId] = useState<string | null>(null);
   const [savingPlaylist, setSavingPlaylist] = useState(false);
+  const [savingRecommendationPlaylist, setSavingRecommendationPlaylist] = useState(false);
   const [draggingPlaylistGameId, setDraggingPlaylistGameId] = useState<string | null>(null);
   const [shareTargetPlaylist, setShareTargetPlaylist] = useState<GamePlaylist | null>(null);
   const [form] = Form.useForm<CollectionGame>();
@@ -209,7 +224,7 @@ export function BoardShelfApp() {
     strategy: collection.filter((game) => game.tags.some((tag) => strategyTags.includes(tag))).length,
     party: collection.filter((game) => game.tags.some((tag) => partyTags.includes(tag))).length,
   }), [collection]);
-  const recommendations = useMemo(() => collection
+  const recommendationCandidates = useMemo(() => collection
     .filter((game) => (game.minPlayers ?? 1) <= people && (game.maxPlayers ?? 99) >= people && (!familyGameOnly || game.tags.some((tag) => familyTags.includes(tag))))
     .map((game) => {
       const hasStrategyTag = game.tags.some((tag) => strategyTags.includes(tag));
@@ -224,8 +239,22 @@ export function BoardShelfApp() {
       if (!matchedMechanisms.length) reasons.push(playStyle === "strategy" && hasStrategyTag ? "전략형 성향" : playStyle === "party" && hasPartyTag ? "파티형 성향" : "균형 성향");
       return { game, score, reasons };
     })
-    .toSorted((first, second) => second.score - first.score || (second.game.personalRating ?? 0) - (first.game.personalRating ?? 0) || second.game.plays - first.game.plays)
-    .slice(0, 5), [collection, familyGameOnly, people, playStyle, preferredMechanisms]);
+    .toSorted((first, second) => second.score - first.score || (second.game.personalRating ?? 0) - (first.game.personalRating ?? 0) || second.game.plays - first.game.plays), [collection, familyGameOnly, people, playStyle, preferredMechanisms]);
+  const recommendations = useMemo(() => {
+    if (recommendationLimitMode === "count") return recommendationCandidates.slice(0, recommendationGameCount);
+
+    let usedMinutes = 0;
+    const selected: typeof recommendationCandidates = [];
+    for (const candidate of recommendationCandidates) {
+      const minutes = estimatePlayTimeMinutes(candidate.game.playTime);
+      if (selected.length > 0 && usedMinutes + minutes > recommendationDuration) continue;
+      selected.push(candidate);
+      usedMinutes += minutes;
+      if (usedMinutes >= recommendationDuration) break;
+    }
+    return selected;
+  }, [recommendationCandidates, recommendationDuration, recommendationGameCount, recommendationLimitMode]);
+  const recommendedPlayTime = useMemo(() => recommendations.reduce((sum, { game }) => sum + estimatePlayTimeMinutes(game.playTime), 0), [recommendations]);
 
   const collectionTags = useMemo(() => [...new Set(collection.flatMap((game) => game.tags))].toSorted(), [collection]);
   const recentGames = useMemo(() => collection.toSorted((first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime()).slice(0, 8), [collection]);
@@ -251,22 +280,15 @@ export function BoardShelfApp() {
     return game ? [game] : [];
   }), [collection, playlistGameIds]);
   const popularTagGroups = useMemo(() => {
-    const gamesByTag = new Map<string, CollectionGame[]>();
-    for (const game of collection) {
-      for (const tag of game.tags) {
-        const games = gamesByTag.get(tag) ?? [];
-        games.push(game);
-        gamesByTag.set(tag, games);
-      }
-    }
-    return [...gamesByTag.entries()]
-      .map(([tag, games]) => {
-        const dashboardGames = games.toSorted((first, second) => (second.personalRating ?? 0) - (first.personalRating ?? 0) || second.plays - first.plays);
-        const rankedGames = games.toSorted((first, second) => (second.personalRating ?? 0) - (first.personalRating ?? 0) || second.plays - first.plays);
-        return { tag, count: games.length, games: dashboardGames.slice(0, 5), rankedGames };
+    return homeTagRecommendations
+      .map(({ label, tags }) => {
+        const tagSet = new Set(tags);
+        const rankedGames = collection
+          .filter((game) => game.tags.some((tag) => tagSet.has(tag)))
+          .toSorted((first, second) => (second.personalRating ?? 0) - (first.personalRating ?? 0) || second.plays - first.plays);
+        return { tag: label, count: rankedGames.length, games: rankedGames.slice(0, 5), rankedGames };
       })
-      .toSorted((first, second) => second.count - first.count || first.tag.localeCompare(second.tag, "ko"))
-      .slice(0, 3);
+      .filter(({ count }) => count > 0);
   }, [collection]);
 
   const isEditingSelected = selected ? collection.some((game) => game.id === selected.id) : false;
@@ -283,6 +305,19 @@ export function BoardShelfApp() {
       }))
       .filter(({ score }) => score > 0)
       .toSorted((first, second) => second.score - first.score || (second.game.personalRating ?? 0) - (first.game.personalRating ?? 0) || second.game.plays - first.game.plays)
+      .slice(0, 8)
+      .map(({ game }) => game);
+  }, [collection, viewingGame]);
+  const differentGenreGames = useMemo(() => {
+    if (!viewingGame) return [];
+    const viewingTags = new Set(viewingGame.tags);
+    return collection
+      .filter((game) => game.id !== viewingGame.id)
+      .map((game) => ({
+        game,
+        overlap: game.tags.reduce((sum, tag) => sum + (viewingTags.has(tag) ? 1 : 0), 0),
+      }))
+      .toSorted((first, second) => first.overlap - second.overlap || (second.game.personalRating ?? 0) - (first.game.personalRating ?? 0) || second.game.plays - first.game.plays)
       .slice(0, 8)
       .map(({ game }) => game);
   }, [collection, viewingGame]);
@@ -586,6 +621,45 @@ export function BoardShelfApp() {
     }
   }
 
+  async function saveRecommendationPlaylist() {
+    if (!isAdmin) {
+      messageApi.info("관리자 로그인 후 플레이리스트로 등록할 수 있습니다.");
+      changePage("registration");
+      return;
+    }
+    if (!recommendations.length) {
+      messageApi.error("플레이리스트로 등록할 추천 게임이 없습니다.");
+      return;
+    }
+
+    setSavingRecommendationPlaylist(true);
+    try {
+      const title = `${people}명 ${familyGameOnly ? "가족 " : ""}모임 추천 리스트`;
+      const limitDescription = recommendationLimitMode === "duration"
+        ? `총 ${recommendationDuration}분 안팎으로 맞춘 추천입니다.`
+        : `추천 게임 ${recommendationGameCount}개로 구성했습니다.`;
+      const styleDescription = playStyle === "strategy" ? "전략형 성향" : playStyle === "party" ? "파티형 성향" : "균형 잡힌 성향";
+      const response = await fetch("/api/playlists", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          description: `${limitDescription} ${styleDescription}${preferredMechanisms.length ? `과 ${preferredMechanisms.join(", ")} 취향` : ""}을 반영했습니다.`,
+          gameIds: recommendations.map(({ game }) => game.id),
+        }),
+      });
+      const result = await response.json() as GamePlaylist | { message?: string };
+      if (!response.ok) throw new Error("message" in result ? result.message : "추천 리스트를 플레이리스트로 저장하지 못했습니다.");
+      const savedPlaylist = result as GamePlaylist;
+      setPlaylists((current) => [savedPlaylist, ...current.filter((playlist) => playlist.shareId !== savedPlaylist.shareId)]);
+      messageApi.success("추천 리스트를 플레이리스트로 등록했습니다.");
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : "추천 리스트를 플레이리스트로 저장하지 못했습니다.");
+    } finally {
+      setSavingRecommendationPlaylist(false);
+    }
+  }
+
   async function deletePlaylist(shareId: string) {
     try {
       const response = await fetch(`/api/playlists/${shareId}`, { method: "DELETE" });
@@ -686,7 +760,7 @@ export function BoardShelfApp() {
                       <Col xs={24} sm={8}><Statistic title="태그" value={collectionTags.length} suffix="개" /></Col>
                     </Row>
                   </Card>{updatedGames.length > 0 && <Card className="section-card updated-games-card" title="업데이트된 게임"><div className="updated-game-masonry">{updatedGames.map((game) => <button type="button" key={game.id} aria-label={`${game.title} 상세 보기`} onClick={() => viewGameDetail(game)}><Cover game={game} /></button>)}</div></Card>}<Card className="section-card recent-games-card" title="최근 등록" extra={<Typography.Text type="secondary">최근 추가한 5개 게임</Typography.Text>}>{recentGames.length ? <Carousel className="recent-game-carousel" arrows draggable dots={false} slidesToShow={5} slidesToScroll={1} responsive={[{ breakpoint: 1200, settings: { slidesToShow: 4 } }, { breakpoint: 900, settings: { slidesToShow: 3 } }, { breakpoint: 640, settings: { slidesToShow: 2 } }]}>{recentGames.map((game) => <div className="recent-game-slide" key={game.id}><button type="button" onClick={() => viewGameDetail(game)}><Cover game={game} /><Typography.Text strong ellipsis>{game.title}</Typography.Text><Typography.Text type="secondary">등록 {game.createdAt.slice(0, 10)}</Typography.Text></button></div>)}</Carousel> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="최근 등록한 게임이 없습니다." />}</Card>{popularTagGroups.length ? <div className="tag-dashboard">{popularTagGroups.map(({ tag, count, games, rankedGames }) => <Card className="section-card tag-game-card" key={tag} title={<Space size={8}><Tag color="blue">{tag}</Tag><Typography.Text type="secondary">{count}개 게임 · 플레이 많은 순</Typography.Text></Space>} extra={count > 5 ? <Button type="link" onClick={() => setTagGallery({ tag, games: rankedGames, sortLabel: "평점 높은 순 · 동점 시 플레이 횟수순" })}>더보기</Button> : null}><div className="tag-game-row">{games.map((game) => <article className="tag-game-item" key={game.id}><button className="tag-game-cover" type="button" onClick={() => viewGameDetail(game)}><Cover game={game} /></button><Typography.Text strong ellipsis>{game.title}</Typography.Text><Typography.Text type="secondary">플레이 {game.plays}회</Typography.Text><Space size={3}><Rate disabled allowHalf value={game.personalRating ?? 0} /><Typography.Text type="secondary">{game.personalRating?.toFixed(1) ?? "-"}</Typography.Text></Space></article>)}</div></Card>)}</div> : <Card className="section-card" title="시작하기"><Typography.Paragraph type="secondary">관리자 로그인 후 첫 보드게임을 등록하면 태그별 게임 목록이 표시됩니다.</Typography.Paragraph></Card>}</div>
-                  <div hidden={activeMenu !== "detail"}><Card className="section-card" title={viewingGame?.title ?? "게임 상세"}>{viewingGame ? <><div className="selected-game game-detail-header"><Cover game={viewingGame} /><div><Typography.Title level={4}>{viewingGame.title}</Typography.Title><Typography.Text type="secondary">{viewingGame.englishTitle} {viewingGame.year ? `(${viewingGame.year})` : ""}</Typography.Text></div><Button className="boardlife-link-button" type="text" icon={<BoardlifeIcon />} href={viewingGame.sourceUrl} target="_blank" rel="noreferrer" aria-label={`${viewingGame.title} Boardlife 게임 정보 열기`} title="Boardlife 게임 정보 열기" /></div><Space wrap>{viewingGame.tags.map((tag) => <Tag key={tag}>{tag}</Tag>)}</Space><section className="game-description"><Typography.Title level={5}>게임 설명</Typography.Title><Typography.Paragraph>{hasUsableGameDescription(viewingGame.description) ? viewingGame.description : (loadingGameDescription ? "Boardlife에서 게임 설명을 불러오는 중입니다." : "등록된 게임 설명이 없습니다.")}</Typography.Paragraph></section><div className="personal-review-panel"><div className="personal-review-heading"><div><Typography.Text strong>개인 평가</Typography.Text><Typography.Text type="secondary">내가 남긴 평점과 플레이 기록</Typography.Text></div><div className="personal-rating"><Rate disabled allowHalf value={viewingGame.personalRating ?? 0} /><Typography.Text strong>{viewingGame.personalRating?.toFixed(1) ?? "평가 없음"}</Typography.Text></div></div><Typography.Paragraph>{viewingGame.review || "아직 작성한 한줄 리뷰가 없습니다."}</Typography.Paragraph><Typography.Text type="secondary">플레이 {viewingGame.plays}회</Typography.Text></div><div className="game-metadata"><Typography.Text type="secondary">{viewingGame.minPlayers}-{viewingGame.maxPlayers}명 · {viewingGame.minAge}세 이상 · {viewingGame.playTime ?? "시간 미입력"}</Typography.Text></div>{viewingGame.videos.length > 0 && <section className="game-video-section"><Typography.Title level={5}><YoutubeOutlined /> 관련 YouTube 영상</Typography.Title><div className="game-video-grid">{viewingGame.videos.map((video) => <a key={video.id ?? video.youtubeId} href={video.url} target="_blank" rel="noreferrer"><img src={video.thumbnail} alt="" /><span><strong>{video.title}</strong><small>{video.channelName ?? "YouTube"}</small></span></a>)}</div></section>}<div className="play-photo-grid">{viewingGame.photos.map((photo) => <figure key={photo.id}><img src={photo.url} alt={photo.caption || `${viewingGame.title} 플레이 사진`} /><figcaption>{photo.caption || "플레이 기록"}</figcaption></figure>)}</div>{similarGames.length > 0 && <section className="similar-games-section"><div className="similar-games-heading"><Typography.Title level={5}>비슷한 게임 추천</Typography.Title><Typography.Text type="secondary">공통 태그와 내 평점을 기준으로 골랐어요.</Typography.Text></div><div className="home-game-rail similar-games-rail">{similarGames.map((game) => <button type="button" className="home-game-card" key={game.id} onClick={() => viewGameDetail(game)}><Cover game={game} /><span>{game.title}</span></button>)}</div></section>}</> : <Empty description="게임을 찾지 못했습니다." />}</Card></div>
+                  <div hidden={activeMenu !== "detail"}><Card className="section-card" title={viewingGame?.title ?? "게임 상세"}>{viewingGame ? <><div className="selected-game game-detail-header"><Cover game={viewingGame} /><div><Typography.Title level={4}>{viewingGame.title}</Typography.Title><Typography.Text type="secondary">{viewingGame.englishTitle} {viewingGame.year ? `(${viewingGame.year})` : ""}</Typography.Text></div><Button className="boardlife-link-button" type="text" icon={<BoardlifeIcon />} href={viewingGame.sourceUrl} target="_blank" rel="noreferrer" aria-label={`${viewingGame.title} Boardlife 게임 정보 열기`} title="Boardlife 게임 정보 열기" /></div><Space wrap>{viewingGame.tags.map((tag) => <Tag key={tag}>{tag}</Tag>)}</Space><section className="game-description"><Typography.Title level={5}>게임 설명</Typography.Title><Typography.Paragraph>{hasUsableGameDescription(viewingGame.description) ? viewingGame.description : (loadingGameDescription ? "Boardlife에서 게임 설명을 불러오는 중입니다." : "등록된 게임 설명이 없습니다.")}</Typography.Paragraph></section><div className="personal-review-panel"><div className="personal-review-heading"><div><Typography.Text strong>개인 평가</Typography.Text><Typography.Text type="secondary">내가 남긴 평점과 플레이 기록</Typography.Text></div><div className="personal-rating"><Rate disabled allowHalf value={viewingGame.personalRating ?? 0} /><Typography.Text strong>{viewingGame.personalRating?.toFixed(1) ?? "평가 없음"}</Typography.Text></div></div><Typography.Paragraph>{viewingGame.review || "아직 작성한 한줄 리뷰가 없습니다."}</Typography.Paragraph><Typography.Text type="secondary">플레이 {viewingGame.plays}회</Typography.Text></div><div className="game-metadata"><Typography.Text type="secondary">{viewingGame.minPlayers}-{viewingGame.maxPlayers}명 · {viewingGame.minAge}세 이상 · {viewingGame.playTime ?? "시간 미입력"}</Typography.Text></div>{viewingGame.videos.length > 0 && <section className="game-video-section"><Typography.Title level={5}><YoutubeOutlined /> 관련 YouTube 영상</Typography.Title><div className="game-video-grid">{viewingGame.videos.map((video) => <a key={video.id ?? video.youtubeId} href={video.url} target="_blank" rel="noreferrer"><img src={video.thumbnail} alt="" /><span><strong>{video.title}</strong><small>{video.channelName ?? "YouTube"}</small></span></a>)}</div></section>}<div className="play-photo-grid">{viewingGame.photos.map((photo) => <figure key={photo.id}><img src={photo.url} alt={photo.caption || `${viewingGame.title} 플레이 사진`} /><figcaption>{photo.caption || "플레이 기록"}</figcaption></figure>)}</div>{similarGames.length > 0 && <section className="similar-games-section"><div className="similar-games-heading"><Typography.Title level={5}>비슷한 게임 추천</Typography.Title><Typography.Text type="secondary">공통 태그와 내 평점을 기준으로 골랐어요.</Typography.Text></div><div className="home-game-rail similar-games-rail">{similarGames.map((game) => <button type="button" className="home-game-card" key={game.id} onClick={() => viewGameDetail(game)}><Cover game={game} /><span>{game.title}</span></button>)}</div></section>}{differentGenreGames.length > 0 && <section className="similar-games-section different-genre-section"><div className="similar-games-heading"><Typography.Title level={5}>전혀 다른 장르 추천</Typography.Title><Typography.Text type="secondary">겹치는 태그가 적은 게임으로 분위기를 바꿔보세요.</Typography.Text></div><div className="home-game-rail similar-games-rail">{differentGenreGames.map((game) => <button type="button" className="home-game-card" key={game.id} onClick={() => viewGameDetail(game)}><Cover game={game} /><span>{game.title}</span></button>)}</div></section>}</> : <Empty description="게임을 찾지 못했습니다." />}</Card></div>
                   <div hidden={activeMenu !== "collection"}><Card id="collection" className="section-card collection-card" title="내 보유 게임" extra={<Typography.Text type="secondary">{isAdmin ? "게임을 클릭해 수정" : "게임을 클릭해 상세 보기"}</Typography.Text>}>
                     <div className="collection-toolbar"><Input.Search value={collectionQuery} onChange={(event) => setCollectionQuery(event.target.value)} allowClear placeholder="게임명, 영문명, 태그 검색" prefix={<SearchOutlined />} /><Typography.Text type="secondary">{filteredCollection.length}개 결과</Typography.Text></div>
                     <div className="game-grid">
@@ -694,7 +768,7 @@ export function BoardShelfApp() {
                     </div>
                     {!filteredCollection.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={collection.length ? "검색 결과가 없습니다." : "아직 등록한 보드게임이 없습니다."} />}
                   </Card></div>
-                  <div hidden={activeMenu !== "recommend"}><Card id="recommend" className="recommendation-card" title="모임 추천"><Typography.Paragraph type="secondary">세 가지 질문에 답하면 컬렉션의 태그와 플레이 기록을 조합해 게임 5개를 골라드립니다.</Typography.Paragraph><Steps className="recommendation-steps" current={Math.min(recommendationStep, 2)} size="small" items={[{ title: "참가 인원" }, { title: "플레이 성향" }, { title: "게임 방식" }]} /><div className="recommendation-wizard" key={recommendationStep}>{recommendationStep === 0 && <section className="recommendation-slide"><Typography.Title level={4}>몇 명이 함께하나요?</Typography.Title><Typography.Paragraph type="secondary">플레이 가능한 인원과 가족 게임 여부를 기준으로 먼저 걸러냅니다.</Typography.Paragraph><div className="recommendation-number-fields"><label>참가 인원<InputNumber min={1} max={12} value={people} onChange={(value) => setPeople(value ?? 1)} addonAfter="명" /></label><div className="recommendation-field"><Typography.Text>가족 게임 필터</Typography.Text><Space className="family-game-options" wrap><Button type={familyGameOnly ? "primary" : "default"} aria-pressed={familyGameOnly} onClick={() => setFamilyGameOnly(true)}>가족 게임만 보기</Button><Button type={familyGameOnly ? "default" : "primary"} aria-pressed={!familyGameOnly} onClick={() => setFamilyGameOnly(false)}>전체 게임 보기</Button></Space></div></div></section>}{recommendationStep === 1 && <section className="recommendation-slide"><Typography.Title level={4}>어떤 분위기를 좋아하나요?</Typography.Title><Typography.Paragraph type="secondary">컬렉션에는 전략형 태그 게임 {recommendationProfile.strategy}개, 파티형 태그 게임 {recommendationProfile.party}개가 있습니다.</Typography.Paragraph><Radio.Group className="play-style-options" value={playStyle} onChange={(event) => setPlayStyle(event.target.value)}><Radio.Button value="strategy"><strong>전략형</strong><span>생각할 거리와 선택의 재미</span></Radio.Button><Radio.Button value="balanced"><strong>균형</strong><span>전략과 가벼움의 적당한 조합</span></Radio.Button><Radio.Button value="party"><strong>파티형</strong><span>웃음과 즉흥적인 재미</span></Radio.Button></Radio.Group></section>}{recommendationStep === 2 && <section className="recommendation-slide"><Typography.Title level={4}>좋아하는 게임 방식을 골라주세요.</Typography.Title><Typography.Paragraph type="secondary">여러 개를 선택하면 해당 형식을 적절히 섞어 추천합니다. 선택하지 않아도 성향에 맞춰 추천합니다.</Typography.Paragraph><Checkbox.Group className="mechanism-options" value={preferredMechanisms} onChange={(values) => setPreferredMechanisms(values as string[])} options={mechanismOptions.map((option) => ({ label: option.value, value: option.value }))} /></section>}{recommendationStep === 3 && <section className="recommendation-slide recommendation-result"><Typography.Title level={4}>{people}명을 위한 추천 게임 5개</Typography.Title><Typography.Paragraph type="secondary">{familyGameOnly ? "가족 게임 · " : ""}{playStyle === "strategy" ? "전략 중심" : playStyle === "party" ? "파티 중심" : "균형 잡힌"} 성향{preferredMechanisms.length ? ` · ${preferredMechanisms.join(", ")}` : ""}을 반영했습니다.</Typography.Paragraph><div className="recommendation-list">{recommendations.map(({ game, reasons }) => <button className="recommendation-item" type="button" key={game.id} onClick={() => viewGameDetail(game)}><Cover game={game} size="small" /><span><Typography.Text strong>{game.title}</Typography.Text><Typography.Text type="secondary">{game.playTime ?? "시간 미입력"} · 플레이 {game.plays}회</Typography.Text><Space size={[3, 3]} wrap>{reasons.slice(0, 3).map((reason) => <Tag key={reason} color="blue">{reason}</Tag>)}</Space></span></button>)}</div>{!recommendations.length && <Empty description="조건에 맞는 게임이 없어요. 인원이나 가족 게임 조건을 조정해 보세요." image={Empty.PRESENTED_IMAGE_SIMPLE} />}</section>}</div><div className="recommendation-actions">{recommendationStep > 0 && <Button onClick={() => setRecommendationStep((step) => step - 1)}>이전</Button>}{recommendationStep < 3 ? <Button type="primary" onClick={() => setRecommendationStep((step) => step + 1)}>{recommendationStep === 2 ? "추천 게임 보기" : "다음"}</Button> : <Button onClick={() => setRecommendationStep(0)}>다시 추천하기</Button>}</div></Card></div>
+                  <div hidden={activeMenu !== "recommend"}><Card id="recommend" className="recommendation-card" title="모임 추천"><Typography.Paragraph type="secondary">조건에 맞춰 컬렉션의 태그와 플레이 기록을 조합해 모임용 게임 리스트를 골라드립니다.</Typography.Paragraph><Steps className="recommendation-steps" current={Math.min(recommendationStep, 2)} size="small" items={[{ title: "참가 인원" }, { title: "플레이 성향" }, { title: "게임 방식" }]} /><div className="recommendation-wizard" key={recommendationStep}>{recommendationStep === 0 && <section className="recommendation-slide"><Typography.Title level={4}>몇 명이 얼마나 플레이하나요?</Typography.Title><Typography.Paragraph type="secondary">플레이 가능한 인원, 가족 게임 여부, 총 진행 시간 또는 게임 개수를 기준으로 먼저 걸러냅니다.</Typography.Paragraph><div className="recommendation-number-fields"><label>참가 인원<InputNumber min={1} max={12} value={people} onChange={(value) => setPeople(value ?? 1)} addonAfter="명" /></label><div className="recommendation-field"><Typography.Text>가족 게임 필터</Typography.Text><Space className="family-game-options" wrap><Button type={familyGameOnly ? "primary" : "default"} aria-pressed={familyGameOnly} onClick={() => setFamilyGameOnly(true)}>가족 게임만 보기</Button><Button type={familyGameOnly ? "default" : "primary"} aria-pressed={!familyGameOnly} onClick={() => setFamilyGameOnly(false)}>전체 게임 보기</Button></Space></div><div className="recommendation-field recommendation-limit-field"><Typography.Text>추천 분량</Typography.Text><Radio.Group value={recommendationLimitMode} onChange={(event) => setRecommendationLimitMode(event.target.value)} optionType="button" buttonStyle="solid"><Radio.Button value="duration">총 진행 시간</Radio.Button><Radio.Button value="count">게임 개수</Radio.Button></Radio.Group>{recommendationLimitMode === "duration" ? <InputNumber min={30} max={600} step={30} value={recommendationDuration} onChange={(value) => setRecommendationDuration(value ?? 120)} addonAfter="분" /> : <InputNumber min={1} max={12} value={recommendationGameCount} onChange={(value) => setRecommendationGameCount(value ?? 5)} addonAfter="개" />}</div></div></section>}{recommendationStep === 1 && <section className="recommendation-slide"><Typography.Title level={4}>어떤 분위기를 좋아하나요?</Typography.Title><Typography.Paragraph type="secondary">컬렉션에는 전략형 태그 게임 {recommendationProfile.strategy}개, 파티형 태그 게임 {recommendationProfile.party}개가 있습니다.</Typography.Paragraph><Radio.Group className="play-style-options" value={playStyle} onChange={(event) => setPlayStyle(event.target.value)}><Radio.Button value="strategy"><strong>전략형</strong><span>생각할 거리와 선택의 재미</span></Radio.Button><Radio.Button value="balanced"><strong>균형</strong><span>전략과 가벼움의 적당한 조합</span></Radio.Button><Radio.Button value="party"><strong>파티형</strong><span>웃음과 즉흥적인 재미</span></Radio.Button></Radio.Group></section>}{recommendationStep === 2 && <section className="recommendation-slide"><Typography.Title level={4}>좋아하는 게임 방식을 골라주세요.</Typography.Title><Typography.Paragraph type="secondary">여러 개를 선택하면 해당 형식을 적절히 섞어 추천합니다. 선택하지 않아도 성향에 맞춰 추천합니다.</Typography.Paragraph><Checkbox.Group className="mechanism-options" value={preferredMechanisms} onChange={(values) => setPreferredMechanisms(values as string[])} options={mechanismOptions.map((option) => ({ label: option.value, value: option.value }))} /></section>}{recommendationStep === 3 && <section className="recommendation-slide recommendation-result"><Typography.Title level={4}>{people}명을 위한 추천 게임 {recommendations.length}개</Typography.Title><Typography.Paragraph type="secondary">{recommendationLimitMode === "duration" ? `예상 ${recommendedPlayTime}분 / 목표 ${recommendationDuration}분 · ` : `목표 ${recommendationGameCount}개 · `}{familyGameOnly ? "가족 게임 · " : ""}{playStyle === "strategy" ? "전략 중심" : playStyle === "party" ? "파티 중심" : "균형 잡힌"} 성향{preferredMechanisms.length ? ` · ${preferredMechanisms.join(", ")}` : ""}을 반영했습니다.</Typography.Paragraph><div className="recommendation-list">{recommendations.map(({ game, reasons }) => <button className="recommendation-item" type="button" key={game.id} onClick={() => viewGameDetail(game)}><Cover game={game} size="small" /><span><Typography.Text strong>{game.title}</Typography.Text><Typography.Text type="secondary">{game.playTime ?? "시간 미입력"} · 플레이 {game.plays}회</Typography.Text><Space size={[3, 3]} wrap>{reasons.slice(0, 3).map((reason) => <Tag key={reason} color="blue">{reason}</Tag>)}</Space></span></button>)}</div>{!recommendations.length && <Empty description="조건에 맞는 게임이 없어요. 인원이나 가족 게임 조건을 조정해 보세요." image={Empty.PRESENTED_IMAGE_SIMPLE} />}</section>}</div><div className="recommendation-actions">{recommendationStep > 0 && <Button onClick={() => setRecommendationStep((step) => step - 1)}>이전</Button>}{recommendationStep < 3 ? <Button type="primary" onClick={() => setRecommendationStep((step) => step + 1)}>{recommendationStep === 2 ? "추천 게임 보기" : "다음"}</Button> : <><Button onClick={() => setRecommendationStep(0)}>다시 추천하기</Button><Button type="primary" loading={savingRecommendationPlaylist} disabled={!recommendations.length} onClick={() => void saveRecommendationPlaylist()}>플레이리스트로 등록</Button></>}</div></Card></div>
                   <div hidden={activeMenu !== "playlists"}><Card className="section-card playlist-editor-card" title={editingPlaylistShareId ? "플레이리스트 수정" : "새 플레이리스트"} extra={isAdmin ? <Button type="link" onClick={startNewPlaylist}>새로 만들기</Button> : null}>{isAdmin ? <><div className="playlist-metadata"><Input value={playlistTitle} onChange={(event) => setPlaylistTitle(event.target.value)} placeholder="플레이리스트 이름" maxLength={80} /><Input.TextArea value={playlistDescription} onChange={(event) => setPlaylistDescription(event.target.value)} placeholder="이 리스트를 만든 이유를 짧게 적어주세요." rows={2} maxLength={300} /></div><div className="playlist-builder"><section><Typography.Text strong>게임 찾기</Typography.Text><Input.Search value={playlistQuery} onChange={(event) => setPlaylistQuery(event.target.value)} allowClear placeholder="게임명, 영문명, 태그 검색" prefix={<SearchOutlined />} /><div className="playlist-game-picker">{filteredPlaylistGames.map((game) => <label key={game.id}><Checkbox checked={playlistGameIds.includes(game.id)} onChange={() => togglePlaylistGame(game.id)} /><Cover game={game} size="small" /><span><Typography.Text strong ellipsis>{game.title}</Typography.Text><Typography.Text type="secondary">{game.tags.slice(0, 2).join(" · ") || "태그 없음"}</Typography.Text></span></label>)}</div></section><section><Typography.Text strong>플레이 순서 <Typography.Text type="secondary">({selectedPlaylistGames.length}개 · 드래그로 변경)</Typography.Text></Typography.Text><div className="playlist-order-list">{selectedPlaylistGames.map((game, index) => <article draggable key={game.id} className={draggingPlaylistGameId === game.id ? "dragging" : undefined} onDragStart={() => setDraggingPlaylistGameId(game.id)} onDragEnd={() => setDraggingPlaylistGameId(null)} onDragOver={(event) => event.preventDefault()} onDrop={() => movePlaylistGame(game.id)}><span className="playlist-position">{index + 1}</span><Cover game={game} size="small" /><Typography.Text strong ellipsis>{game.title}</Typography.Text><Button type="text" danger size="small" onClick={() => togglePlaylistGame(game.id)}>제거</Button></article>)}{!selectedPlaylistGames.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="왼쪽에서 게임을 선택하세요." />}</div></section></div><div className="form-actions"><Button type="primary" loading={savingPlaylist} onClick={() => void savePlaylist()}>플레이리스트 저장</Button></div></> : <Empty description="플레이리스트 작성은 관리자만 할 수 있습니다." image={Empty.PRESENTED_IMAGE_SIMPLE} />}</Card><Card className="section-card" title="내 플레이리스트" extra={<Typography.Text type="secondary">8자리 소개 페이지 링크로 공유하세요</Typography.Text>}><div className="playlist-library">{playlists.map((playlist) => <article key={playlist.shareId} className="playlist-library-item" role="link" tabIndex={0} aria-label={`${playlist.title} 소개 페이지 열기`} onClick={() => openSharedPlaylist(playlist.shareId)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openSharedPlaylist(playlist.shareId); } }}><div><Typography.Title level={5}>{playlist.title}</Typography.Title><Typography.Paragraph type="secondary" ellipsis={{ rows: 2 }}>{playlist.description || "소개가 없습니다."}</Typography.Paragraph><Typography.Text type="secondary">게임 {playlist.games.length}개</Typography.Text></div><div className="playlist-library-games">{playlist.games.slice(0, 5).map((game) => <Cover game={game} size="small" key={game.id} />)}</div><Space wrap><Button size="small" onClick={(event) => { event.stopPropagation(); openSharedPlaylist(playlist.shareId); }}>소개 페이지 열기</Button><Button size="small" icon={<ShareAltOutlined />} onClick={(event) => { event.stopPropagation(); void sharePlaylist(playlist); }}>소개 페이지 공유</Button>{isAdmin && <Button size="small" onClick={(event) => { event.stopPropagation(); editPlaylist(playlist); }}>수정</Button>}{isAdmin && <Button size="small" danger onClick={(event) => { event.stopPropagation(); void deletePlaylist(playlist.shareId); }}>삭제</Button>}</Space></article>)}{!playlists.length && <Empty description="아직 만든 플레이리스트가 없습니다." image={Empty.PRESENTED_IMAGE_SIMPLE} />}</div></Card></div>
                 </Col>}
                 {activeMenu === "registration" && <Col xs={24} xl={24}>
