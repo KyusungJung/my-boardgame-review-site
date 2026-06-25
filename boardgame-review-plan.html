@@ -247,6 +247,19 @@
           <li>각 Phase 완료 시 로컬 동작 확인 후 변경 사항을 공유하고, 최종 승인 범위에서 원격 저장소에 반영합니다.</li>
         </ul>
       </section>
+
+      <section class="card">
+        <h2>11. 변경 기능 정리 · 2026. 06. 26.</h2>
+        <table>
+          <thead><tr><th>영역</th><th>변경 내용</th><th>확인 기준</th></tr></thead>
+          <tbody>
+            <tr><td>게임 상세</td><td>Boardlife 이동 링크의 외부 favicon 직접 참조를 제거하고, 사이트 내부의 <code>/boardlife-icon.svg</code> 아이콘을 사용합니다.</td><td>상세 화면에서 링크 버튼 이미지가 깨지지 않고 고정 크기로 표시됩니다.</td></tr>
+            <tr><td>안정성</td><td>외부 사이트의 favicon 응답 형식, 핫링크 제한, 브라우저별 ICO 렌더링 차이에 영향을 받지 않도록 로컬 SVG 자산으로 교체했습니다.</td><td>배포 환경에서도 이미지 요청이 현재 도메인 안에서 처리됩니다.</td></tr>
+            <tr><td>접근성</td><td>아이콘은 장식 요소로 처리하고, 실제 링크 의미는 기존 버튼 텍스트와 링크 속성이 담당하도록 유지합니다.</td><td>스크린 리더에서 중복된 이미지 설명이 읽히지 않습니다.</td></tr>
+          </tbody>
+        </table>
+        <p class="callout">검증 항목: <code>npm run lint</code>, <code>npx next build</code>, 배포 후 상세 화면의 Boardlife 링크 아이콘 로드 상태 확인.</p>
+      </section>
     </main>
     <footer>Board Shelf · 구현 전 검토를 위한 계획서</footer>
   </body>

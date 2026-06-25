@@ -102,7 +102,7 @@ function HomeTagRail({ groups, onTag }: { groups: Array<{ tag: string; games: Co
 }
 
 function BoardlifeIcon() {
-  return <img className="boardlife-favicon" src="https://boardlife.co.kr/favicon.ico" alt="" aria-hidden="true" />;
+  return <img className="boardlife-favicon" src="/boardlife-icon.svg" alt="" aria-hidden="true" />;
 }
 
 function estimatePlayTimeMinutes(playTime?: string) {
