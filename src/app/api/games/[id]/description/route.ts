@@ -18,11 +18,12 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const metadata = await getBoardlifeGame(id);
     if (!hasUsableGameDescription(metadata.description)) return NextResponse.json({ description: null, source: "boardlife" });
 
-    await prisma.game.update({
+    const updatedGame = await prisma.game.update({
       where: { boardlifeId: id },
       data: { description: metadata.description, sourceFetchedAt: new Date(metadata.sourceFetchedAt) },
+      select: { updatedAt: true },
     });
-    return NextResponse.json({ description: metadata.description, source: "boardlife" });
+    return NextResponse.json({ description: metadata.description, source: "boardlife", updatedAt: updatedGame.updatedAt.toISOString() });
   } catch {
     return NextResponse.json({ message: "게임 설명을 불러오지 못했습니다." }, { status: 502 });
   }
