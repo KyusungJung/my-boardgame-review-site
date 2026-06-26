@@ -207,6 +207,10 @@ export function BoardShelfApp() {
   }, [activeMenu]);
 
   useEffect(() => {
+    if (activeMenu === "collection") setCollectionQuery("");
+  }, [activeMenu]);
+
+  useEffect(() => {
     window.history.replaceState({ boardShelfView: activeMenuRef.current }, "", window.location.href);
     function handlePopState(event: PopStateEvent) {
       const view = event.state && typeof event.state === "object" ? (event.state as { boardShelfView?: string }).boardShelfView : undefined;
@@ -447,7 +451,7 @@ export function BoardShelfApp() {
       ? { ...game, description: cachedDescription ?? undefined }
       : game;
     setViewingGame(detailGame);
-    changePage("detail", { gameId: game.id, replaceHistory: options.replaceHistory });
+    changePage("detail", { gameId: game.id, replaceHistory: options.replaceHistory, instantScroll: true });
     if (hasUsableGameDescription(detailGame.description) || cachedDescription === null || descriptionRequestsRef.current.has(game.id)) return;
 
     descriptionRequestsRef.current.add(game.id);
