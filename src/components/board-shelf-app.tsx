@@ -11,6 +11,7 @@ import {
   Col,
   ConfigProvider,
   Divider,
+  Dropdown,
   Drawer,
   Empty,
   Form,
@@ -33,6 +34,7 @@ import {
   message,
 } from "antd";
 import {
+  ArrowLeftOutlined,
   BookOutlined,
   DashboardOutlined,
   LockOutlined,
@@ -44,6 +46,7 @@ import {
   SearchOutlined,
   ShareAltOutlined,
   TeamOutlined,
+  UserOutlined,
   YoutubeOutlined,
 } from "@ant-design/icons";
 import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -138,6 +141,9 @@ export function BoardShelfApp() {
   const [loginPassword, setLoginPassword] = useState("");
   const [loggingIn, setLoggingIn] = useState(false);
   const [activeMenu, setActiveMenu] = useState("dashboard");
+  const activeMenuRef = useRef("dashboard");
+  const sharedGameAppliedRef = useRef(false);
+  const [navigationStack, setNavigationStack] = useState<string[]>([]);
   const [people, setPeople] = useState(4);
   const [familyGameOnly, setFamilyGameOnly] = useState(false);
   const [recommendationStep, setRecommendationStep] = useState(0);
@@ -189,6 +195,35 @@ export function BoardShelfApp() {
     }
     void loadDashboardData();
   }, []);
+
+  useEffect(() => {
+    activeMenuRef.current = activeMenu;
+  }, [activeMenu]);
+
+  useEffect(() => {
+    window.history.replaceState({ boardShelfView: activeMenuRef.current }, "", window.location.href);
+    function handlePopState(event: PopStateEvent) {
+      const view = event.state && typeof event.state === "object" ? (event.state as { boardShelfView?: string }).boardShelfView : undefined;
+      if (view && view in pageMetadata) {
+        activeMenuRef.current = view;
+        setActiveMenu(view);
+        setMobileNavOpen(false);
+        setNavigationStack((current) => current.slice(0, -1));
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    }
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    if (sharedGameAppliedRef.current || !collection.length) return;
+    const sharedGameId = new URLSearchParams(window.location.search).get("game");
+    sharedGameAppliedRef.current = true;
+    if (!sharedGameId) return;
+    const sharedGame = collection.find((game) => game.id === sharedGameId);
+    if (sharedGame) viewGameDetail(sharedGame, { replaceHistory: true });
+  }, [collection]);
 
   useEffect(() => {
     if (deferredQuery.trim().length < 2) {
@@ -325,11 +360,37 @@ export function BoardShelfApp() {
     ? { title: "게임 수정", description: "등록한 보드게임 정보를 수정하세요." }
     : pageMetadata[activeMenu as keyof typeof pageMetadata] ?? pageMetadata.dashboard;
 
-  function changePage(key: string) {
+  function viewUrlFor(key: string, gameId?: string) {
+    const url = new URL(window.location.href);
+    url.search = "";
+    url.hash = "";
+    if (key === "detail" && gameId) url.searchParams.set("game", gameId);
+    return `${url.pathname}${url.search}`;
+  }
+
+  function changePage(key: string, options: { gameId?: string; replaceHistory?: boolean; skipStack?: boolean } = {}) {
     if (!(key in pageMetadata)) return;
+    const previous = activeMenuRef.current;
+    if (previous !== key && !options.skipStack) {
+      setNavigationStack((current) => [...current, previous].slice(-20));
+    }
+    activeMenuRef.current = key;
     setActiveMenu(key);
     setMobileNavOpen(false);
+    const nextUrl = viewUrlFor(key, options.gameId);
+    if (options.replaceHistory) window.history.replaceState({ boardShelfView: key }, "", nextUrl);
+    else window.history.pushState({ boardShelfView: key }, "", nextUrl);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function goBack() {
+    const previous = navigationStack.at(-1);
+    if (previous) {
+      setNavigationStack((current) => current.slice(0, -1));
+      changePage(previous, { replaceHistory: true, skipStack: true });
+      return;
+    }
+    if (activeMenu !== "dashboard") changePage("dashboard", { replaceHistory: true, skipStack: true });
   }
 
   function chooseCandidate(candidate: BoardlifeSearchResult) {
@@ -373,13 +434,12 @@ export function BoardShelfApp() {
       editGame(game);
       return;
     }
-    setViewingGame(game);
-    changePage("detail");
+    viewGameDetail(game);
   }
 
-  function viewGameDetail(game: CollectionGame) {
+  function viewGameDetail(game: CollectionGame, options: { replaceHistory?: boolean } = {}) {
     setViewingGame(game);
-    changePage("detail");
+    changePage("detail", { gameId: game.id, replaceHistory: options.replaceHistory });
     if (hasUsableGameDescription(game.description)) return;
 
     setLoadingGameDescription(true);
@@ -552,6 +612,30 @@ export function BoardShelfApp() {
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       messageApi.error("공유 주소를 복사하지 못했습니다.");
+    }
+  }
+
+  function gameShareUrl(game: Pick<CollectionGame, "id">) {
+    return `${window.location.origin}/?game=${encodeURIComponent(game.id)}`;
+  }
+
+  async function shareGame(game: CollectionGame) {
+    const url = gameShareUrl(game);
+    const shareData = {
+      title: `${game.title} | Board Shelf`,
+      text: game.review || game.description || `${game.title} 보드게임 정보를 확인해 보세요.`,
+      url,
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        return;
+      }
+      await copyShareUrl(url);
+      messageApi.success("게임 공유 주소를 복사했습니다.");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      messageApi.error("게임 공유를 완료하지 못했습니다.");
     }
   }
 
@@ -736,13 +820,20 @@ export function BoardShelfApp() {
     void copyPlaylistShareUrl(playlist);
   }
 
+  const canGoBack = activeMenu !== "dashboard";
+  const profileMenuItems = [
+    { key: "status", label: isAdmin ? "관리자 모드 활성화" : "관리자 로그인이 필요합니다", disabled: true },
+    { key: "login", icon: <LockOutlined />, label: isAdmin ? "게임 추가" : "관리자 로그인" },
+    ...(isAdmin ? [{ key: "logout", icon: <LogoutOutlined />, label: "관리자 로그아웃" }] : []),
+  ];
+
   return (
     <ConfigProvider theme={{ token: { colorPrimary: "#1677ff", borderRadius: 8, fontFamily: "var(--font-sans)" } }}>
       <App>{messageContext}
         <Layout className="app-shell home-shell">
           <Layout>
-            <Header className="home-header"><div className="home-header-start"><Button className="mobile-nav-trigger" type="text" icon={<MenuOutlined />} aria-label="메뉴 열기" onClick={() => setMobileNavOpen(true)} /><button className="home-brand" type="button" onClick={() => changePage("dashboard")}>Board <span>Shelf</span></button></div><nav className="home-navigation" aria-label="주요 메뉴">{navigationItems.map((item) => <Button key={item.key} type="text" className={activeMenu === item.key ? "active" : undefined} onClick={() => changePage(item.key)}>{item.label}</Button>)}</nav><div className="home-header-actions"><Button type="text" icon={<SearchOutlined />} aria-label="게임 검색" onClick={() => changePage("collection")} />{isAdmin ? <Button type="primary" onClick={() => changePage("registration")}>게임 추가</Button> : <Button type="primary" onClick={() => changePage("registration")}>관리자 로그인</Button>}<Button type="text" icon={<ShareAltOutlined />} onClick={() => void shareCollection()}>공유</Button>{isAdmin && <Button type="text" icon={<LogoutOutlined />} onClick={() => void logout()}>로그아웃</Button>}<Avatar>KJ</Avatar></div></Header>
-            {!isHome && <section className="app-page-title"><Typography.Title level={2}>{currentPage.title}</Typography.Title><Typography.Text type="secondary">{currentPage.description}</Typography.Text></section>}
+            <Header className="home-header"><div className="home-header-start"><Button className="mobile-nav-trigger" type="text" icon={<MenuOutlined />} aria-label="메뉴 열기" onClick={() => setMobileNavOpen(true)} /><button className="home-brand" type="button" onClick={() => changePage("dashboard")}>Board <span>Shelf</span></button></div><nav className="home-navigation" aria-label="주요 메뉴">{navigationItems.map((item) => <Button key={item.key} type="text" className={activeMenu === item.key ? "active" : undefined} onClick={() => changePage(item.key)}>{item.label}</Button>)}</nav><div className="home-header-actions"><Button type="text" icon={<SearchOutlined />} aria-label="게임 검색" onClick={() => changePage("collection")} /><Button type="text" icon={<ShareAltOutlined />} onClick={() => void shareCollection()}>공유</Button><Dropdown trigger={["hover", "click"]} menu={{ items: profileMenuItems, onClick: ({ key }) => { if (key === "logout") void logout(); else if (key === "login") changePage("registration"); } }}><button className={`profile-trigger ${isAdmin ? "active" : "inactive"}`} type="button" aria-label={isAdmin ? "관리자 프로필 메뉴" : "관리자 로그인 메뉴"} onClick={(event) => event.preventDefault()}><Avatar icon={isAdmin ? undefined : <UserOutlined />}>{isAdmin ? "KJ" : null}</Avatar></button></Dropdown></div></Header>
+            {!isHome && <section className="app-page-title"><div className="page-title-row">{canGoBack && <Button icon={<ArrowLeftOutlined />} onClick={goBack}>뒤로</Button>}<div><Typography.Title level={2}>{currentPage.title}</Typography.Title><Typography.Text type="secondary">{currentPage.description}</Typography.Text></div></div></section>}
             <Content id="dashboard" className={`home-content${isHome ? "" : " app-content"}`}>
               <Row gutter={[20, 20]}>
                 {activeMenu !== "registration" && <Col xs={24} xl={24}>
@@ -760,7 +851,7 @@ export function BoardShelfApp() {
                       <Col xs={24} sm={8}><Statistic title="태그" value={collectionTags.length} suffix="개" /></Col>
                     </Row>
                   </Card>{updatedGames.length > 0 && <Card className="section-card updated-games-card" title="업데이트된 게임"><div className="updated-game-masonry">{updatedGames.map((game) => <button type="button" key={game.id} aria-label={`${game.title} 상세 보기`} onClick={() => viewGameDetail(game)}><Cover game={game} /></button>)}</div></Card>}<Card className="section-card recent-games-card" title="최근 등록" extra={<Typography.Text type="secondary">최근 추가한 5개 게임</Typography.Text>}>{recentGames.length ? <Carousel className="recent-game-carousel" arrows draggable dots={false} slidesToShow={5} slidesToScroll={1} responsive={[{ breakpoint: 1200, settings: { slidesToShow: 4 } }, { breakpoint: 900, settings: { slidesToShow: 3 } }, { breakpoint: 640, settings: { slidesToShow: 2 } }]}>{recentGames.map((game) => <div className="recent-game-slide" key={game.id}><button type="button" onClick={() => viewGameDetail(game)}><Cover game={game} /><Typography.Text strong ellipsis>{game.title}</Typography.Text><Typography.Text type="secondary">등록 {game.createdAt.slice(0, 10)}</Typography.Text></button></div>)}</Carousel> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="최근 등록한 게임이 없습니다." />}</Card>{popularTagGroups.length ? <div className="tag-dashboard">{popularTagGroups.map(({ tag, count, games, rankedGames }) => <Card className="section-card tag-game-card" key={tag} title={<Space size={8}><Tag color="blue">{tag}</Tag><Typography.Text type="secondary">{count}개 게임 · 플레이 많은 순</Typography.Text></Space>} extra={count > 5 ? <Button type="link" onClick={() => setTagGallery({ tag, games: rankedGames, sortLabel: "평점 높은 순 · 동점 시 플레이 횟수순" })}>더보기</Button> : null}><div className="tag-game-row">{games.map((game) => <article className="tag-game-item" key={game.id}><button className="tag-game-cover" type="button" onClick={() => viewGameDetail(game)}><Cover game={game} /></button><Typography.Text strong ellipsis>{game.title}</Typography.Text><Typography.Text type="secondary">플레이 {game.plays}회</Typography.Text><Space size={3}><Rate disabled allowHalf value={game.personalRating ?? 0} /><Typography.Text type="secondary">{game.personalRating?.toFixed(1) ?? "-"}</Typography.Text></Space></article>)}</div></Card>)}</div> : <Card className="section-card" title="시작하기"><Typography.Paragraph type="secondary">관리자 로그인 후 첫 보드게임을 등록하면 태그별 게임 목록이 표시됩니다.</Typography.Paragraph></Card>}</div>
-                  <div hidden={activeMenu !== "detail"}><Card className="section-card" title={viewingGame?.title ?? "게임 상세"}>{viewingGame ? <><div className="selected-game game-detail-header"><Cover game={viewingGame} /><div><Typography.Title level={4}>{viewingGame.title}</Typography.Title><Typography.Text type="secondary">{viewingGame.englishTitle} {viewingGame.year ? `(${viewingGame.year})` : ""}</Typography.Text></div><Button className="boardlife-link-button" type="text" icon={<BoardlifeIcon />} href={viewingGame.sourceUrl} target="_blank" rel="noreferrer" aria-label={`${viewingGame.title} Boardlife 게임 정보 열기`} title="Boardlife 게임 정보 열기" /></div><Space wrap>{viewingGame.tags.map((tag) => <Tag key={tag}>{tag}</Tag>)}</Space><section className="game-description"><Typography.Title level={5}>게임 설명</Typography.Title><Typography.Paragraph>{hasUsableGameDescription(viewingGame.description) ? viewingGame.description : (loadingGameDescription ? "Boardlife에서 게임 설명을 불러오는 중입니다." : "등록된 게임 설명이 없습니다.")}</Typography.Paragraph></section><div className="personal-review-panel"><div className="personal-review-heading"><div><Typography.Text strong>개인 평가</Typography.Text><Typography.Text type="secondary">내가 남긴 평점과 플레이 기록</Typography.Text></div><div className="personal-rating"><Rate disabled allowHalf value={viewingGame.personalRating ?? 0} /><Typography.Text strong>{viewingGame.personalRating?.toFixed(1) ?? "평가 없음"}</Typography.Text></div></div><Typography.Paragraph>{viewingGame.review || "아직 작성한 한줄 리뷰가 없습니다."}</Typography.Paragraph><Typography.Text type="secondary">플레이 {viewingGame.plays}회</Typography.Text></div><div className="game-metadata"><Typography.Text type="secondary">{viewingGame.minPlayers}-{viewingGame.maxPlayers}명 · {viewingGame.minAge}세 이상 · {viewingGame.playTime ?? "시간 미입력"}</Typography.Text></div>{viewingGame.videos.length > 0 && <section className="game-video-section"><Typography.Title level={5}><YoutubeOutlined /> 관련 YouTube 영상</Typography.Title><div className="game-video-grid">{viewingGame.videos.map((video) => <a key={video.id ?? video.youtubeId} href={video.url} target="_blank" rel="noreferrer"><img src={video.thumbnail} alt="" /><span><strong>{video.title}</strong><small>{video.channelName ?? "YouTube"}</small></span></a>)}</div></section>}<div className="play-photo-grid">{viewingGame.photos.map((photo) => <figure key={photo.id}><img src={photo.url} alt={photo.caption || `${viewingGame.title} 플레이 사진`} /><figcaption>{photo.caption || "플레이 기록"}</figcaption></figure>)}</div>{similarGames.length > 0 && <section className="similar-games-section"><div className="similar-games-heading"><Typography.Title level={5}>비슷한 게임 추천</Typography.Title><Typography.Text type="secondary">공통 태그와 내 평점을 기준으로 골랐어요.</Typography.Text></div><div className="home-game-rail similar-games-rail">{similarGames.map((game) => <button type="button" className="home-game-card" key={game.id} onClick={() => viewGameDetail(game)}><Cover game={game} /><span>{game.title}</span></button>)}</div></section>}{differentGenreGames.length > 0 && <section className="similar-games-section different-genre-section"><div className="similar-games-heading"><Typography.Title level={5}>전혀 다른 장르 추천</Typography.Title><Typography.Text type="secondary">겹치는 태그가 적은 게임으로 분위기를 바꿔보세요.</Typography.Text></div><div className="home-game-rail similar-games-rail">{differentGenreGames.map((game) => <button type="button" className="home-game-card" key={game.id} onClick={() => viewGameDetail(game)}><Cover game={game} /><span>{game.title}</span></button>)}</div></section>}</> : <Empty description="게임을 찾지 못했습니다." />}</Card></div>
+                  <div hidden={activeMenu !== "detail"}><Card className="section-card" title={viewingGame?.title ?? "게임 상세"}>{viewingGame ? <><div className="detail-actions"><Button icon={<ArrowLeftOutlined />} onClick={goBack}>뒤로가기</Button><Button icon={<ShareAltOutlined />} onClick={() => void shareGame(viewingGame)}>게임 공유</Button></div><div className="selected-game game-detail-header"><Cover game={viewingGame} /><div><Typography.Title level={4}>{viewingGame.title}</Typography.Title><Typography.Text type="secondary">{viewingGame.englishTitle} {viewingGame.year ? `(${viewingGame.year})` : ""}</Typography.Text></div><Button className="boardlife-link-button" type="text" icon={<BoardlifeIcon />} href={viewingGame.sourceUrl} target="_blank" rel="noreferrer" aria-label={`${viewingGame.title} Boardlife 게임 정보 열기`} title="Boardlife 게임 정보 열기" /></div><Space wrap>{viewingGame.tags.map((tag) => <Tag key={tag}>{tag}</Tag>)}</Space><section className="game-description"><Typography.Title level={5}>게임 설명</Typography.Title><Typography.Paragraph>{hasUsableGameDescription(viewingGame.description) ? viewingGame.description : (loadingGameDescription ? "Boardlife에서 게임 설명을 불러오는 중입니다." : "등록된 게임 설명이 없습니다.")}</Typography.Paragraph></section><div className="personal-review-panel"><div className="personal-review-heading"><div><Typography.Text strong>개인 평가</Typography.Text><Typography.Text type="secondary">내가 남긴 평점과 플레이 기록</Typography.Text></div><div className="personal-rating"><Rate disabled allowHalf value={viewingGame.personalRating ?? 0} /><Typography.Text strong>{viewingGame.personalRating?.toFixed(1) ?? "평가 없음"}</Typography.Text></div></div><Typography.Paragraph>{viewingGame.review || "아직 작성한 한줄 리뷰가 없습니다."}</Typography.Paragraph><Typography.Text type="secondary">플레이 {viewingGame.plays}회</Typography.Text></div><div className="game-metadata"><Typography.Text type="secondary">{viewingGame.minPlayers}-{viewingGame.maxPlayers}명 · {viewingGame.minAge}세 이상 · {viewingGame.playTime ?? "시간 미입력"}</Typography.Text></div>{viewingGame.videos.length > 0 && <section className="game-video-section"><Typography.Title level={5}><YoutubeOutlined /> 관련 YouTube 영상</Typography.Title><div className="game-video-grid">{viewingGame.videos.map((video) => <a key={video.id ?? video.youtubeId} href={video.url} target="_blank" rel="noreferrer"><img src={video.thumbnail} alt="" /><span><strong>{video.title}</strong><small>{video.channelName ?? "YouTube"}</small></span></a>)}</div></section>}<div className="play-photo-grid">{viewingGame.photos.map((photo) => <figure key={photo.id}><img src={photo.url} alt={photo.caption || `${viewingGame.title} 플레이 사진`} /><figcaption>{photo.caption || "플레이 기록"}</figcaption></figure>)}</div>{similarGames.length > 0 && <section className="similar-games-section"><div className="similar-games-heading"><Typography.Title level={5}>비슷한 게임 추천</Typography.Title><Typography.Text type="secondary">공통 태그와 내 평점을 기준으로 골랐어요.</Typography.Text></div><div className="home-game-rail similar-games-rail">{similarGames.map((game) => <button type="button" className="home-game-card" key={game.id} onClick={() => viewGameDetail(game)}><Cover game={game} /><span>{game.title}</span></button>)}</div></section>}{differentGenreGames.length > 0 && <section className="similar-games-section different-genre-section"><div className="similar-games-heading"><Typography.Title level={5}>전혀 다른 장르 추천</Typography.Title><Typography.Text type="secondary">겹치는 태그가 적은 게임으로 분위기를 바꿔보세요.</Typography.Text></div><div className="home-game-rail similar-games-rail">{differentGenreGames.map((game) => <button type="button" className="home-game-card" key={game.id} onClick={() => viewGameDetail(game)}><Cover game={game} /><span>{game.title}</span></button>)}</div></section>}</> : <Empty description="게임을 찾지 못했습니다." />}</Card></div>
                   <div hidden={activeMenu !== "collection"}><Card id="collection" className="section-card collection-card" title="내 보유 게임" extra={<Typography.Text type="secondary">{isAdmin ? "게임을 클릭해 수정" : "게임을 클릭해 상세 보기"}</Typography.Text>}>
                     <div className="collection-toolbar"><Input.Search value={collectionQuery} onChange={(event) => setCollectionQuery(event.target.value)} allowClear placeholder="게임명, 영문명, 태그 검색" prefix={<SearchOutlined />} /><Typography.Text type="secondary">{filteredCollection.length}개 결과</Typography.Text></div>
                     <div className="game-grid">
@@ -800,7 +891,7 @@ export function BoardShelfApp() {
         </Layout>
         <Drawer className="mobile-navigation" title={<button className="drawer-brand-button" type="button" onClick={() => changePage("dashboard")}>Board <span>Shelf</span></button>} placement="left" open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} styles={{ body: { padding: 12 } }}>
           <Menu mode="inline" selectedKeys={[activeMenu]} onClick={({ key }) => changePage(key)} items={navigationItems} />
-          <div className="mobile-navigation-actions">{isAdmin ? <Button type="primary" block icon={<PlusOutlined />} onClick={() => changePage("registration")}>게임 추가</Button> : <Button type="primary" block icon={<LockOutlined />} onClick={() => changePage("registration")}>관리자 로그인</Button>}<Button block icon={<ShareAltOutlined />} onClick={() => void shareCollection()}>전체 컬렉션 공유</Button>{isAdmin && <Button block icon={<LogoutOutlined />} onClick={() => void logout()}>관리자 로그아웃</Button>}</div>
+          <div className="mobile-navigation-actions">{isAdmin && <Button type="primary" block icon={<PlusOutlined />} onClick={() => changePage("registration")}>게임 추가</Button>}<Button block icon={<ShareAltOutlined />} onClick={() => void shareCollection()}>전체 컬렉션 공유</Button></div>
         </Drawer>
         <Modal title={tagGallery ? `${tagGallery.tag} 게임` : "태그 게임"} open={Boolean(tagGallery)} footer={null} onCancel={() => setTagGallery(null)}><Typography.Paragraph type="secondary">{tagGallery?.sortLabel}</Typography.Paragraph><List dataSource={tagGallery?.games ?? []} renderItem={(game) => <List.Item className="tag-gallery-item" onClick={() => viewGameDetail(game)}><List.Item.Meta avatar={<Cover game={game} size="small" />} title={game.title} description={`평점 ${game.personalRating?.toFixed(1) ?? "-"} · 플레이 ${game.plays}회`} /></List.Item>} /></Modal>
         <Modal title="플레이리스트 공유" open={Boolean(shareTargetPlaylist)} footer={null} onCancel={() => setShareTargetPlaylist(null)}><Typography.Paragraph type="secondary">카카오톡이 설치된 모바일 기기에서는 앱 공유를 누른 뒤 카카오톡을 선택할 수 있습니다.</Typography.Paragraph><Space direction="vertical" size={10} style={{ display: "flex" }}><Button block type="primary" onClick={() => void sharePlaylistWithApps()}>카카오톡 등 앱으로 공유</Button><Button block onClick={() => { if (shareTargetPlaylist) void copyPlaylistShareUrl(shareTargetPlaylist); setShareTargetPlaylist(null); }}>공유 주소 복사</Button></Space></Modal>

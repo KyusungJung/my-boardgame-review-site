@@ -256,9 +256,12 @@
             <tr><td>게임 상세</td><td>Boardlife 이동 링크의 외부 favicon 직접 참조를 제거하고, 사이트 내부의 <code>/boardlife-icon.svg</code> 아이콘을 사용합니다.</td><td>상세 화면에서 링크 버튼 이미지가 깨지지 않고 고정 크기로 표시됩니다.</td></tr>
             <tr><td>안정성</td><td>외부 사이트의 favicon 응답 형식, 핫링크 제한, 브라우저별 ICO 렌더링 차이에 영향을 받지 않도록 로컬 SVG 자산으로 교체했습니다.</td><td>배포 환경에서도 이미지 요청이 현재 도메인 안에서 처리됩니다.</td></tr>
             <tr><td>접근성</td><td>아이콘은 장식 요소로 처리하고, 실제 링크 의미는 기존 버튼 텍스트와 링크 속성이 담당하도록 유지합니다.</td><td>스크린 리더에서 중복된 이미지 설명이 읽히지 않습니다.</td></tr>
+            <tr><td>iOS 북마크</td><td>Safari 북마크와 홈 화면 추가에서 사용할 <code>apple-touch-icon.png</code>와 웹 앱 manifest 아이콘을 추가했습니다.</td><td>iPhone Safari에서 북마크/홈 화면 추가 시 Board Shelf 아이콘이 함께 표시됩니다.</td></tr>
+            <tr><td>헤더·프로필</td><td>관리자 로그인/로그아웃 진입을 프로필 드롭다운 메뉴로 이동하고, 비로그인 상태의 프로필은 비활성 상태로 표시합니다.</td><td>헤더 버튼 hover 시 텍스트가 검게 변하지 않고, 프로필 클릭 또는 hover로 관리자 메뉴가 열립니다.</td></tr>
+            <tr><td>탐색·공유</td><td>상세 화면에 뒤로가기와 게임 공유 버튼을 추가하고, 공유 주소는 <code>/?game=게임ID</code> 형식으로 특정 게임 상세를 바로 엽니다.</td><td>상세 화면에서 뒤로가기 버튼과 브라우저 뒤로가기가 이전 화면으로 돌아가며, 공유 링크 접근 시 해당 게임 상세가 표시됩니다.</td></tr>
           </tbody>
         </table>
-        <p class="callout">검증 항목: <code>npm run lint</code>, <code>npx next build</code>, 배포 후 상세 화면의 Boardlife 링크 아이콘 로드 상태 확인.</p>
+        <p class="callout">검증 항목: <code>npm run lint</code>, <code>next build</code>, 배포 후 상세 화면의 Boardlife 링크 아이콘, iOS용 touch icon, 프로필 메뉴, 게임 공유 링크 응답 상태 확인.</p>
       </section>
     </main>
     <footer>Board Shelf · 구현 전 검토를 위한 계획서</footer>

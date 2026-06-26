@@ -5,8 +5,16 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://my-boardgame-review-site.vercel.app"),
   title: "Board Shelf | 보드게임 컬렉션",
   description: "보드게임을 기록하고 모임에 맞는 게임을 추천받으세요.",
+  manifest: "/site.webmanifest",
   icons: {
-    icon: "/icon.svg",
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    shortcut: "/icon.svg",
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
   },
   openGraph: {
     type: "website",
