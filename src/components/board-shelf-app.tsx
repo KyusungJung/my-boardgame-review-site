@@ -215,7 +215,7 @@ export function BoardShelfApp() {
         setActiveMenu(view);
         setMobileNavOpen(false);
         setNavigationStack((current) => current.slice(0, -1));
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        window.scrollTo({ top: 0, behavior: "auto" });
       }
     }
     window.addEventListener("popstate", handlePopState);
@@ -334,6 +334,7 @@ export function BoardShelfApp() {
 
   const isEditingSelected = selected ? collection.some((game) => game.id === selected.id) : false;
   const isHome = activeMenu === "dashboard";
+  const shouldKeepHomeMounted = isHome || activeMenu === "detail";
   const featuredGame = updatedGames[0] ?? recentGames[0] ?? mostPlayedGames[0];
   const similarGames = useMemo(() => {
     if (!viewingGame) return [];
@@ -374,7 +375,7 @@ export function BoardShelfApp() {
     return `${url.pathname}${url.search}`;
   }
 
-  function changePage(key: string, options: { gameId?: string; replaceHistory?: boolean; skipStack?: boolean } = {}) {
+  function changePage(key: string, options: { gameId?: string; replaceHistory?: boolean; skipStack?: boolean; instantScroll?: boolean } = {}) {
     if (!(key in pageMetadata)) return;
     const previous = activeMenuRef.current;
     if (previous !== key && !options.skipStack) {
@@ -386,17 +387,17 @@ export function BoardShelfApp() {
     const nextUrl = viewUrlFor(key, options.gameId);
     if (options.replaceHistory) window.history.replaceState({ boardShelfView: key }, "", nextUrl);
     else window.history.pushState({ boardShelfView: key }, "", nextUrl);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: options.instantScroll ? "auto" : "smooth" });
   }
 
   function goBack() {
     const previous = navigationStack.at(-1);
     if (previous) {
       setNavigationStack((current) => current.slice(0, -1));
-      changePage(previous, { replaceHistory: true, skipStack: true });
+      changePage(previous, { replaceHistory: true, skipStack: true, instantScroll: true });
       return;
     }
-    if (activeMenu !== "dashboard") changePage("dashboard", { replaceHistory: true, skipStack: true });
+    if (activeMenu !== "dashboard") changePage("dashboard", { replaceHistory: true, skipStack: true, instantScroll: true });
   }
 
   function mergeGamePatch(gameId: string, patch: Partial<CollectionGame>) {
@@ -862,7 +863,7 @@ export function BoardShelfApp() {
             <Content id="dashboard" className={`home-content${isHome ? "" : " app-content"}`}>
               <Row gutter={[20, 20]}>
                 {activeMenu !== "registration" && <Col xs={24} xl={24}>
-                  <div hidden={!isHome} className="home-page">
+                  <div hidden={!shouldKeepHomeMounted} className={`home-page ${isHome ? "is-active" : "is-preserved"}`} aria-hidden={!isHome}>
                     {featuredGame ? <section className="home-hero"><div className="home-hero-copy"><Typography.Text>최근에 손본 게임</Typography.Text><Typography.Title>{featuredGame.title}</Typography.Title><Typography.Text className="home-hero-subtitle">{featuredGame.englishTitle || "내 컬렉션에서 다시 꺼내볼 게임"}</Typography.Text><Space size={8} className="home-hero-rating"><Rate disabled allowHalf value={featuredGame.personalRating ?? 0} /><Typography.Text>{featuredGame.personalRating?.toFixed(1) ?? "평가 없음"}</Typography.Text></Space><Typography.Paragraph>{featuredGame.review || featuredGame.description || "게임 정보와 플레이 기록을 확인해 보세요."}</Typography.Paragraph><Space><Button type="primary" onClick={() => viewGameDetail(featuredGame)}>상세 보기</Button>{isAdmin && <Button onClick={() => editGame(featuredGame)}>수정하기</Button>}</Space></div><div className="home-hero-media"><Cover game={featuredGame} /></div></section> : <section className="home-empty-hero"><Typography.Title>첫 보드게임을 컬렉션에 추가해 보세요.</Typography.Title><Typography.Paragraph>등록한 게임이 쌓일수록 최근 업데이트와 태그별 추천을 홈에서 바로 만날 수 있습니다.</Typography.Paragraph>{isAdmin && <Button type="primary" onClick={() => changePage("registration")}>게임 추가</Button>}</section>}
                     {updatedGames.length > 0 && <HomeGameRail title="최근 업데이트" games={updatedGames} onGame={viewGameDetail} onMore={() => changePage("collection")} />}
                     {recentGames.length > 0 && <HomeGameRail title="최근 등록" games={recentGames} onGame={viewGameDetail} onMore={() => changePage("collection")} />}
