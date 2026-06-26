@@ -631,7 +631,7 @@ export function BoardShelfApp() {
   }
 
   function gameShareUrl(game: Pick<CollectionGame, "id">) {
-    return `${window.location.origin}/?game=${encodeURIComponent(game.id)}`;
+    return `${window.location.origin}/games/${encodeURIComponent(game.id)}`;
   }
 
   async function shareGame(game: CollectionGame) {
