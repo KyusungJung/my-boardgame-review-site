@@ -143,6 +143,8 @@ export function BoardShelfApp() {
   const [activeMenu, setActiveMenu] = useState("dashboard");
   const activeMenuRef = useRef("dashboard");
   const sharedGameAppliedRef = useRef(false);
+  const descriptionCacheRef = useRef(new Map<string, string | null>());
+  const descriptionRequestsRef = useRef(new Set<string>());
   const [navigationStack, setNavigationStack] = useState<string[]>([]);
   const [people, setPeople] = useState(4);
   const [familyGameOnly, setFamilyGameOnly] = useState(false);
@@ -184,7 +186,11 @@ export function BoardShelfApp() {
         const games = gamesResponse.ok ? await gamesResponse.json() as CollectionGame[] : [];
         const session = sessionResponse.ok ? await sessionResponse.json() as { authenticated: boolean } : { authenticated: false };
         const loadedPlaylists = playlistsResponse.ok ? await playlistsResponse.json() as GamePlaylist[] : [];
-        setCollection(Array.isArray(games) ? games : []);
+        const loadedGames = Array.isArray(games) ? games : [];
+        for (const game of loadedGames) {
+          if (hasUsableGameDescription(game.description)) descriptionCacheRef.current.set(game.id, game.description ?? null);
+        }
+        setCollection(loadedGames);
         setIsAdmin(session.authenticated);
         setPlaylists(Array.isArray(loadedPlaylists) ? loadedPlaylists : []);
       } catch {
@@ -393,6 +399,12 @@ export function BoardShelfApp() {
     if (activeMenu !== "dashboard") changePage("dashboard", { replaceHistory: true, skipStack: true });
   }
 
+  function mergeGamePatch(gameId: string, patch: Partial<CollectionGame>) {
+    setCollection((current) => current.map((game) => game.id === gameId ? { ...game, ...patch } : game));
+    setViewingGame((current) => current?.id === gameId ? { ...current, ...patch } : current);
+    setSelected((current) => current?.id === gameId ? { ...current, ...patch } : current);
+  }
+
   function chooseCandidate(candidate: BoardlifeSearchResult) {
     if (collection.some((game) => game.id === candidate.id)) {
       messageApi.info("이미 등록되어 있습니다.");
@@ -438,18 +450,28 @@ export function BoardShelfApp() {
   }
 
   function viewGameDetail(game: CollectionGame, options: { replaceHistory?: boolean } = {}) {
-    setViewingGame(game);
+    const cachedDescription = descriptionCacheRef.current.get(game.id);
+    const detailGame = cachedDescription !== undefined && hasUsableGameDescription(cachedDescription)
+      ? { ...game, description: cachedDescription ?? undefined }
+      : game;
+    setViewingGame(detailGame);
     changePage("detail", { gameId: game.id, replaceHistory: options.replaceHistory });
-    if (hasUsableGameDescription(game.description)) return;
+    if (hasUsableGameDescription(detailGame.description) || cachedDescription === null || descriptionRequestsRef.current.has(game.id)) return;
 
+    descriptionRequestsRef.current.add(game.id);
     setLoadingGameDescription(true);
     void fetch(`/api/games/${game.id}/description`)
       .then(async (response) => response.ok ? response.json() as Promise<{ description?: string | null }> : null)
       .then((result) => {
-        if (result && hasUsableGameDescription(result.description)) setViewingGame((current) => current?.id === game.id ? { ...current, description: result.description ?? undefined } : current);
+        const description = result?.description ?? null;
+        descriptionCacheRef.current.set(game.id, description);
+        if (hasUsableGameDescription(description)) mergeGamePatch(game.id, { description: description ?? undefined });
       })
       .catch(() => undefined)
-      .finally(() => setLoadingGameDescription(false));
+      .finally(() => {
+        descriptionRequestsRef.current.delete(game.id);
+        setLoadingGameDescription(false);
+      });
   }
 
   async function refreshGameDescription() {
@@ -461,7 +483,9 @@ export function BoardShelfApp() {
       const description = "description" in metadata ? metadata.description : undefined;
       if (!response.ok || !hasUsableGameDescription(description)) throw new Error("Boardlife에서 게임 설명을 찾지 못했습니다.");
       form.setFieldValue("description", description);
+      descriptionCacheRef.current.set(selected.id, description ?? null);
       setSelected((current) => current?.id === selected.id ? { ...current, description } : current);
+      mergeGamePatch(selected.id, { description });
       messageApi.success("게임 설명을 새로 불러왔습니다. 수정 저장을 누르면 반영됩니다.");
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : "게임 설명을 갱신하지 못했습니다.");
@@ -564,6 +588,7 @@ export function BoardShelfApp() {
       const savedGame = await response.json() as CollectionGame | { message: string };
       if (!response.ok) throw new Error("message" in savedGame ? savedGame.message : "저장에 실패했습니다.");
       const persistedGame = savedGame as CollectionGame;
+      descriptionCacheRef.current.set(persistedGame.id, hasUsableGameDescription(persistedGame.description) ? persistedGame.description ?? null : null);
       setCollection((current) => [persistedGame, ...current.filter((item) => item.id !== persistedGame.id)]);
       messageApi.success(wasEditing ? `${persistedGame.title} 수정이 완료되었습니다.` : `${persistedGame.title}을(를) 저장했습니다.`);
       setSelected(null);
