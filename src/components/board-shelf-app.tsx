@@ -637,8 +637,6 @@ export function BoardShelfApp() {
   async function shareGame(game: CollectionGame) {
     const url = gameShareUrl(game);
     const shareData = {
-      title: `${game.title} | Board Shelf`,
-      text: game.review || game.description || `${game.title} 보드게임 정보를 확인해 보세요.`,
       url,
     };
     try {
