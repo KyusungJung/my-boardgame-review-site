@@ -934,6 +934,7 @@ export function BoardShelfApp() {
                     {featuredGame ? <section className="home-hero">
                       <div className="home-hero-copy">
                         <Typography.Title>{featuredGame.title}</Typography.Title>
+                        <Typography.Text className="home-hero-mobile-meta">{featuredGame.tags.slice(0, 3).join(" · ")}</Typography.Text>
                         <Typography.Paragraph className="home-hero-description" type="secondary">{featuredHeroSummary}</Typography.Paragraph>
                         {hasPersonalRating(featuredGame) && <Space size={8} className="home-hero-rating"><Rate disabled allowHalf value={featuredGame.personalRating} /><Typography.Text>{featuredGame.personalRating.toFixed(1)}</Typography.Text></Space>}
                         <div className="home-hero-actions">
