@@ -139,6 +139,22 @@ function videoIdFromUrl(value: string) {
   return null;
 }
 
+const HERO_SUMMARY_MAX_LENGTH_DESKTOP = 150;
+const HERO_SUMMARY_MAX_LENGTH_MOBILE = 86;
+
+function limitTextWithEllipsis(text: string, maxLength: number) {
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength).trimEnd()}…`;
+}
+
+function getHomeHeroSummary(featuredGame: CollectionGame) {
+  const review = featuredGame.review?.trim();
+  if (review) return review;
+  const description = featuredGame.description?.trim();
+  if (description && hasUsableGameDescription(description)) return description;
+  return "게임 정보와 플레이 기록을 확인해 보세요.";
+}
+
 export function BoardShelfApp() {
   const [collection, setCollection] = useState<CollectionGame[]>([]);
   const [query, setQuery] = useState("");
@@ -190,6 +206,7 @@ export function BoardShelfApp() {
   const [savingRecommendationPlaylist, setSavingRecommendationPlaylist] = useState(false);
   const [draggingPlaylistGameId, setDraggingPlaylistGameId] = useState<string | null>(null);
   const [shareTargetPlaylist, setShareTargetPlaylist] = useState<GamePlaylist | null>(null);
+  const [isHeroMobileViewport, setIsHeroMobileViewport] = useState(false);
   const [form] = Form.useForm<CollectionGame>();
   const selectedVideos = Form.useWatch("videos", form) ?? [];
   const [messageApi, messageContext] = message.useMessage();
@@ -222,6 +239,14 @@ export function BoardShelfApp() {
   useEffect(() => {
     activeMenuRef.current = activeMenu;
   }, [activeMenu]);
+
+  useEffect(() => {
+    const mobileQuery = window.matchMedia("(max-width: 767px)");
+    const syncViewport = () => setIsHeroMobileViewport(mobileQuery.matches);
+    syncViewport();
+    mobileQuery.addEventListener("change", syncViewport);
+    return () => mobileQuery.removeEventListener("change", syncViewport);
+  }, []);
 
   useEffect(() => {
     if (activeMenu === "collection") setCollectionQuery("");
@@ -373,6 +398,7 @@ export function BoardShelfApp() {
   const isHome = activeMenu === "dashboard";
   const shouldKeepHomeMounted = isHome || activeMenu === "detail";
   const featuredGame = updatedGames[0] ?? recentGames[0] ?? mostPlayedGames[0];
+  const featuredHeroSummary = featuredGame ? limitTextWithEllipsis(getHomeHeroSummary(featuredGame), isHeroMobileViewport ? HERO_SUMMARY_MAX_LENGTH_MOBILE : HERO_SUMMARY_MAX_LENGTH_DESKTOP) : "";
   const similarGames = useMemo(() => {
     if (!viewingGame) return [];
     const viewingTags = new Set(viewingGame.tags);
@@ -905,7 +931,21 @@ export function BoardShelfApp() {
               <Row gutter={[20, 20]}>
                 {activeMenu !== "registration" && <Col xs={24} xl={24}>
                   <div hidden={!shouldKeepHomeMounted} className={`home-page ${isHome ? "is-active" : "is-preserved"}`} aria-hidden={!isHome}>
-                    {featuredGame ? <section className="home-hero"><div className="home-hero-copy"><Typography.Title>{featuredGame.title}</Typography.Title><Typography.Text className="home-hero-subtitle">{ownerNickname}가 공유하는 게임 중 지금 눈여겨볼 게임입니다.</Typography.Text>{hasPersonalRating(featuredGame) && <Space size={8} className="home-hero-rating"><Rate disabled allowHalf value={featuredGame.personalRating} /><Typography.Text>{featuredGame.personalRating.toFixed(1)}</Typography.Text></Space>}<Typography.Paragraph>{featuredGame.review || featuredGame.description || "게임 정보와 플레이 기록을 확인해 보세요."}</Typography.Paragraph><Space><Button type="primary" onClick={() => viewGameDetail(featuredGame)}>상세 보기</Button>{isAdmin && <Button onClick={() => editGame(featuredGame)}>수정하기</Button>}</Space></div><div className="home-hero-media"><Cover game={featuredGame} /></div></section> : <section className="home-empty-hero"><Typography.Title>{ownerNickname}의 첫 보드게임을 컬렉션에 추가해 보세요.</Typography.Title><Typography.Paragraph>등록한 게임이 쌓일수록 최근 업데이트와 태그별 추천을 홈에서 바로 만날 수 있습니다.</Typography.Paragraph>{isAdmin && <Button type="primary" onClick={() => changePage("registration")}>게임 추가</Button>}</section>}
+                    {featuredGame ? <section className="home-hero">
+                      <div className="home-hero-copy">
+                        <Typography.Title>{featuredGame.title}</Typography.Title>
+                        <Typography.Paragraph className="home-hero-description" type="secondary">{featuredHeroSummary}</Typography.Paragraph>
+                        {hasPersonalRating(featuredGame) && <Space size={8} className="home-hero-rating"><Rate disabled allowHalf value={featuredGame.personalRating} /><Typography.Text>{featuredGame.personalRating.toFixed(1)}</Typography.Text></Space>}
+                        <div className="home-hero-actions">
+                          <Space>
+                            <Button type="primary" onClick={() => viewGameDetail(featuredGame)}>상세 보기</Button>
+                            {isAdmin && <Button onClick={() => editGame(featuredGame)}>수정하기</Button>}
+                          </Space>
+                        </div>
+                      </div>
+                      <div className="home-hero-media"><Cover game={featuredGame} /></div>
+                    </section>
+                    : <section className="home-empty-hero"><Typography.Title>{ownerNickname}의 첫 보드게임을 컬렉션에 추가해 보세요.</Typography.Title><Typography.Paragraph>등록한 게임이 쌓일수록 최근 업데이트와 태그별 추천을 홈에서 바로 만날 수 있습니다.</Typography.Paragraph>{isAdmin && <Button type="primary" onClick={() => changePage("registration")}>게임 추가</Button>}</section>}
                     {updatedGames.length > 0 && <HomeGameRail title="최근 업데이트" games={updatedGames} onGame={viewGameDetail} onMore={() => changePage("collection")} />}
                     {recentGames.length > 0 && <HomeGameRail title="최근 등록" games={recentGames} onGame={viewGameDetail} onMore={() => changePage("collection")} />}
                     {mostPlayedGames.length > 0 && <HomeGameRail title="가장 많이 플레이한 게임" games={mostPlayedGames} onGame={viewGameDetail} onMore={() => changePage("collection")} />}
