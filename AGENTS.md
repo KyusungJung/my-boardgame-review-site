@@ -414,7 +414,8 @@ Before making changes:
 - Do not delete user work.
 - Do not overwrite files without reading them first.
 - Do not modify generated files unless necessary.
-- Do not commit changes unless explicitly asked.
+- Commit and push completed repository changes automatically after successful implementation and verification.
+- Do not commit when the user explicitly asks not to commit, when verification fails and no safe partial commit is appropriate, or when unrelated user changes would be included.
 
 Never run:
 
@@ -450,6 +451,29 @@ For Level 2 and Level 3 tasks, run relevant checks when practical.
 If checks are not run, explain why.
 
 Do not claim tests passed unless they were actually run.
+
+## 9.1 Project-Specific Verification
+
+This project uses Next.js, Prisma, Neon, and Vercel. Some commands require a live database connection.
+
+Default local verification:
+
+- Run `npm run typecheck` after code changes.
+- Run browser-based visual verification for UI layout changes when practical.
+- Use the deployed Vercel URL for production layout checks after pushing.
+
+Command behavior:
+
+- `npm run typecheck` runs `prisma generate` and `tsc --noEmit`. This is the default DB-free validation command.
+- `npm run lint` currently performs the same TypeScript validation and is also acceptable.
+- `npm run build` runs `prisma db push --accept-data-loss` before `next build`, so it requires a valid `DATABASE_URL` and can fail locally when the local database is not available.
+- Do not treat a local `npm run build` failure as an application compile failure unless the error happens after Prisma database setup succeeds.
+
+When local build verification is blocked by database configuration:
+
+- State that the blocker is database connectivity or Prisma schema push, not necessarily a code failure.
+- Still run `npm run typecheck` if the change affects TypeScript, React, API routes, or shared logic.
+- For CSS-only changes, use browser verification when possible and report that type/build checks were skipped only if they were not relevant or were blocked.
 
 ---
 
