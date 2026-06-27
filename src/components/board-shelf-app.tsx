@@ -152,6 +152,7 @@ export function BoardShelfApp() {
   const [loadingDetail, startDetailTransition] = useTransition();
   const [saving, setSaving] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [sessionExpiresAt, setSessionExpiresAt] = useState<number | null>(null);
   const [loginPassword, setLoginPassword] = useState("");
   const [loggingIn, setLoggingIn] = useState(false);
   const [activeMenu, setActiveMenu] = useState("dashboard");
@@ -198,7 +199,7 @@ export function BoardShelfApp() {
       try {
         const [gamesResponse, sessionResponse, playlistsResponse] = await Promise.all([fetch("/api/games", { cache: "no-store" }), fetch("/api/auth/session", { cache: "no-store" }), fetch("/api/playlists", { cache: "no-store" })]);
         const games = gamesResponse.ok ? await gamesResponse.json() as CollectionGame[] : [];
-        const session = sessionResponse.ok ? await sessionResponse.json() as { authenticated: boolean } : { authenticated: false };
+        const session = sessionResponse.ok ? await sessionResponse.json() as { authenticated: boolean; expiresAt?: number | null } : { authenticated: false, expiresAt: null };
         const loadedPlaylists = playlistsResponse.ok ? await playlistsResponse.json() as GamePlaylist[] : [];
         const loadedGames = Array.isArray(games) ? games : [];
         for (const game of loadedGames) {
@@ -206,10 +207,12 @@ export function BoardShelfApp() {
         }
         setCollection(loadedGames);
         setIsAdmin(session.authenticated);
+        setSessionExpiresAt(session.authenticated ? session.expiresAt ?? null : null);
         setPlaylists(Array.isArray(loadedPlaylists) ? loadedPlaylists : []);
       } catch {
         setCollection([]);
         setIsAdmin(false);
+        setSessionExpiresAt(null);
         setPlaylists([]);
       }
     }
@@ -223,6 +226,21 @@ export function BoardShelfApp() {
   useEffect(() => {
     if (activeMenu === "collection") setCollectionQuery("");
   }, [activeMenu]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    if (!sessionExpiresAt) {
+      void expireAdminSession();
+      return;
+    }
+    const delay = sessionExpiresAt * 1000 - Date.now();
+    if (delay <= 0) {
+      void expireAdminSession();
+      return;
+    }
+    const timer = window.setTimeout(() => void expireAdminSession(), delay);
+    return () => window.clearTimeout(timer);
+  }, [isAdmin, sessionExpiresAt]);
 
   useEffect(() => {
     window.history.replaceState({ boardShelfView: activeMenuRef.current }, "", window.location.href);
@@ -620,7 +638,10 @@ export function BoardShelfApp() {
     try {
       const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: loginPassword }) });
       if (!response.ok) throw new Error("관리자 비밀번호가 올바르지 않습니다.");
+      const session = await response.json() as { authenticated: boolean; expiresAt?: number | null };
+      if (!session.authenticated || !session.expiresAt) throw new Error("관리자 세션을 시작하지 못했습니다.");
       setIsAdmin(true);
+      setSessionExpiresAt(session.expiresAt ?? null);
       setLoginPassword("");
       messageApi.success("관리자 모드로 전환했습니다.");
     } catch (error) {
@@ -633,8 +654,19 @@ export function BoardShelfApp() {
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
     setIsAdmin(false);
+    setSessionExpiresAt(null);
     setSelected(null);
     form.resetFields();
+  }
+
+  async function expireAdminSession() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    setIsAdmin(false);
+    setSessionExpiresAt(null);
+    setSelected(null);
+    form.resetFields();
+    changePage("dashboard", { replaceHistory: true, instantScroll: true });
+    messageApi.info("관리자 세션이 만료되어 로그아웃했습니다.");
   }
 
   async function shareCollection() {
