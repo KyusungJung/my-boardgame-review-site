@@ -109,6 +109,7 @@ body { margin: 0; color: rgba(0, 0, 0, .88); font-family: var(--font-sans); }
 .selected-game .ant-typography { margin: 0; }
 .game-detail-header { align-items: center; }.game-detail-header > div:not(.game-detail-actions) { min-width: 0; }.game-detail-actions { display: inline-flex; flex: none; flex-wrap: nowrap; gap: 4px; align-items: center; justify-content: flex-end; margin-left: auto; }.game-detail-actions .ant-btn-primary { flex: 0 0 auto; white-space: nowrap; }.game-detail-status { margin-top: 6px; }.game-status-tag { display: inline-flex; align-items: center; gap: 4px; margin: 0; }.game-share-icon-button, .boardlife-link-button { display: inline-grid; flex: 0 0 32px; color: #1677ff; font-size: 19px; }.boardlife-favicon { display: block; width: 20px; height: 20px; border-radius: 4px; object-fit: contain; }.drawer-brand-button { padding: 0; border: 0; background: transparent; color: var(--navy); cursor: pointer; font-family: var(--font-sans); font-size: 22px; font-weight: 750; letter-spacing: -1px; }.drawer-brand-button span { color: #1677ff; }
 .full-width { width: 100%; }
+.play-count-control { display: flex; width: 100%; }.play-count-control .ant-input { text-align: center; }.play-count-control .ant-btn { flex: 0 0 46px; font-weight: 700; }.play-count-control .ant-form-item { flex: 1 1 auto; min-width: 0; }
 .form-actions { display: flex; justify-content: flex-end; width: 100%; }
 .drawer-brand { padding: 0; color: var(--navy); }
 .drawer-brand span { color: #1677ff; }
