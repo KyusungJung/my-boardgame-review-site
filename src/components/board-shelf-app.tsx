@@ -168,6 +168,25 @@ function BoardGameLoading() {
   return <section className="boardgame-loading" aria-live="polite" aria-busy="true"><div className="rolling-dice" aria-hidden="true"><span /><span /><span /><span /><span /></div><Typography.Title level={2}>게임장을 준비하고 있어요</Typography.Title><Typography.Paragraph>컬렉션과 플레이 기록을 불러오는 중입니다.</Typography.Paragraph></section>;
 }
 
+function HomeLoadingSkeleton() {
+  const railLabels = ["최근 업데이트", "최근 등록", "가장 많이 플레이한 게임"];
+  return <div className="home-loading-skeleton" aria-hidden="true">
+    <section className="home-hero home-hero-skeleton">
+      <div className="home-hero-copy">
+        <span className="skeleton-line skeleton-title" />
+        <span className="skeleton-line skeleton-copy" />
+        <span className="skeleton-line skeleton-copy short" />
+        <span className="skeleton-button" />
+      </div>
+      <div className="home-hero-media"><span className="skeleton-cover" /></div>
+    </section>
+    {railLabels.map((label) => <section className="home-rail skeleton-rail" key={label}>
+      <div className="home-rail-heading"><Typography.Title level={4}>{label}</Typography.Title><span className="skeleton-link" /></div>
+      <div className="home-game-rail">{Array.from({ length: 5 }, (_, index) => <article className="home-game-card skeleton-card" key={index}><span className="skeleton-card-image" /><span className="skeleton-card-title" /></article>)}</div>
+    </section>)}
+  </div>;
+}
+
 export function BoardShelfApp() {
   const [collection, setCollection] = useState<CollectionGame[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -956,7 +975,7 @@ export function BoardShelfApp() {
               <Row gutter={[20, 20]}>
                 {activeMenu !== "registration" && <Col xs={24} xl={24}>
                   <div hidden={!shouldKeepHomeMounted} className={`home-page ${isHome ? "is-active" : "is-preserved"}`} aria-hidden={!isHome}>
-                    {initialLoading ? <BoardGameLoading /> : featuredGame ? <section className="home-hero">
+                    {initialLoading ? <div className="home-loading-state"><HomeLoadingSkeleton /><BoardGameLoading /></div> : featuredGame ? <section className="home-hero">
                       <div className="home-hero-copy">
                         <Typography.Title>{featuredGame.title}</Typography.Title>
                         <Typography.Text className="home-hero-mobile-meta">{featuredGame.tags.slice(0, 3).join(" · ")}</Typography.Text>
