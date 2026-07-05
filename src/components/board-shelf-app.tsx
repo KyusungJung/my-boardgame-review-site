@@ -155,8 +155,23 @@ function getHomeHeroSummary(featuredGame: CollectionGame) {
   return "게임 정보와 플레이 기록을 확인해 보세요.";
 }
 
+function isRecentlyUpdated(game: CollectionGame) {
+  return new Date(game.updatedAt).getTime() - new Date(game.createdAt).getTime() > 1000;
+}
+
+function pickRandomGame(games: CollectionGame[]) {
+  if (!games.length) return null;
+  return games[Math.floor(Math.random() * games.length)];
+}
+
+function BoardGameLoading() {
+  return <section className="boardgame-loading" aria-live="polite" aria-busy="true"><div className="rolling-dice" aria-hidden="true"><span /><span /><span /><span /><span /></div><Typography.Title level={2}>게임장을 준비하고 있어요</Typography.Title><Typography.Paragraph>컬렉션과 플레이 기록을 불러오는 중입니다.</Typography.Paragraph></section>;
+}
+
 export function BoardShelfApp() {
   const [collection, setCollection] = useState<CollectionGame[]>([]);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [featuredGameId, setFeaturedGameId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [collectionQuery, setCollectionQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
@@ -222,7 +237,9 @@ export function BoardShelfApp() {
         for (const game of loadedGames) {
           if (hasUsableGameDescription(game.description)) descriptionCacheRef.current.set(game.id, game.description ?? null);
         }
+        const randomFeaturedGame = pickRandomGame(loadedGames.filter(isRecentlyUpdated));
         setCollection(loadedGames);
+        setFeaturedGameId(randomFeaturedGame?.id ?? null);
         setIsAdmin(session.authenticated);
         setSessionExpiresAt(session.authenticated ? session.expiresAt ?? null : null);
         setPlaylists(Array.isArray(loadedPlaylists) ? loadedPlaylists : []);
@@ -231,6 +248,8 @@ export function BoardShelfApp() {
         setIsAdmin(false);
         setSessionExpiresAt(null);
         setPlaylists([]);
+      } finally {
+        setInitialLoading(false);
       }
     }
     void loadDashboardData();
@@ -362,7 +381,7 @@ export function BoardShelfApp() {
   const ownedGameCount = useMemo(() => collection.filter((game) => game.status === "owned").length, [collection]);
   const recentGames = useMemo(() => collection.toSorted((first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime()).slice(0, 8), [collection]);
   const updatedGames = useMemo(() => collection
-    .filter((game) => new Date(game.updatedAt).getTime() - new Date(game.createdAt).getTime() > 1000)
+    .filter(isRecentlyUpdated)
     .toSorted((first, second) => new Date(second.updatedAt).getTime() - new Date(first.updatedAt).getTime())
     .slice(0, 8), [collection]);
   const mostPlayedGames = useMemo(() => collection
@@ -397,7 +416,7 @@ export function BoardShelfApp() {
   const isEditingSelected = selected ? collection.some((game) => game.id === selected.id) : false;
   const isHome = activeMenu === "dashboard";
   const shouldKeepHomeMounted = isHome || activeMenu === "detail";
-  const featuredGame = updatedGames[0] ?? recentGames[0] ?? mostPlayedGames[0];
+  const featuredGame = (featuredGameId ? collection.find((game) => game.id === featuredGameId) : null) ?? updatedGames[0] ?? recentGames[0] ?? mostPlayedGames[0];
   const featuredHeroSummary = featuredGame ? limitTextWithEllipsis(getHomeHeroSummary(featuredGame), isHeroMobileViewport ? HERO_SUMMARY_MAX_LENGTH_MOBILE : HERO_SUMMARY_MAX_LENGTH_DESKTOP) : "";
   const similarGames = useMemo(() => {
     if (!viewingGame) return [];
@@ -937,7 +956,7 @@ export function BoardShelfApp() {
               <Row gutter={[20, 20]}>
                 {activeMenu !== "registration" && <Col xs={24} xl={24}>
                   <div hidden={!shouldKeepHomeMounted} className={`home-page ${isHome ? "is-active" : "is-preserved"}`} aria-hidden={!isHome}>
-                    {featuredGame ? <section className="home-hero">
+                    {initialLoading ? <BoardGameLoading /> : featuredGame ? <section className="home-hero">
                       <div className="home-hero-copy">
                         <Typography.Title>{featuredGame.title}</Typography.Title>
                         <Typography.Text className="home-hero-mobile-meta">{featuredGame.tags.slice(0, 3).join(" · ")}</Typography.Text>
@@ -953,10 +972,10 @@ export function BoardShelfApp() {
                       <div className="home-hero-media"><Cover game={featuredGame} /></div>
                     </section>
                     : <section className="home-empty-hero"><Typography.Title>{ownerNickname}의 첫 보드게임을 컬렉션에 추가해 보세요.</Typography.Title><Typography.Paragraph>등록한 게임이 쌓일수록 최근 업데이트와 태그별 추천을 홈에서 바로 만날 수 있습니다.</Typography.Paragraph>{isAdmin && <Button type="primary" onClick={() => changePage("registration")}>게임 추가</Button>}</section>}
-                    {updatedGames.length > 0 && <HomeGameRail title="최근 업데이트" games={updatedGames} onGame={viewGameDetail} onMore={() => changePage("collection")} />}
-                    {recentGames.length > 0 && <HomeGameRail title="최근 등록" games={recentGames} onGame={viewGameDetail} onMore={() => changePage("collection")} />}
-                    {mostPlayedGames.length > 0 && <HomeGameRail title="가장 많이 플레이한 게임" games={mostPlayedGames} onGame={viewGameDetail} onMore={() => changePage("collection")} />}
-                    {popularTagGroups.length > 0 && <HomeTagRail groups={popularTagGroups} onTag={(tag, games) => tag && setTagGallery({ tag, games, sortLabel: "평점 높은 순 · 동점 시 플레이 횟수순" })} />}
+                    {!initialLoading && updatedGames.length > 0 && <HomeGameRail title="최근 업데이트" games={updatedGames} onGame={viewGameDetail} onMore={() => changePage("collection")} />}
+                    {!initialLoading && recentGames.length > 0 && <HomeGameRail title="최근 등록" games={recentGames} onGame={viewGameDetail} onMore={() => changePage("collection")} />}
+                    {!initialLoading && mostPlayedGames.length > 0 && <HomeGameRail title="가장 많이 플레이한 게임" games={mostPlayedGames} onGame={viewGameDetail} onMore={() => changePage("collection")} />}
+                    {!initialLoading && popularTagGroups.length > 0 && <HomeTagRail groups={popularTagGroups} onTag={(tag, games) => tag && setTagGallery({ tag, games, sortLabel: "평점 높은 순 · 동점 시 플레이 횟수순" })} />}
                   </div>
                   <div hidden><Card className="section-card" title="컬렉션 요약">
                     <Row gutter={[12, 12]}>
