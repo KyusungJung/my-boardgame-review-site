@@ -722,6 +722,7 @@ export function BoardShelfApp() {
       setIsAdmin(true);
       setSessionExpiresAt(session.expiresAt ?? null);
       setLoginPassword("");
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
       const returnTarget = adminLoginReturnRef.current;
       adminLoginReturnRef.current = null;
       if (returnTarget && returnTarget.key !== "registration") {
