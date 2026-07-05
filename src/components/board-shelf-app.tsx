@@ -207,6 +207,7 @@ export function BoardShelfApp() {
   const [loggingIn, setLoggingIn] = useState(false);
   const [activeMenu, setActiveMenu] = useState("dashboard");
   const activeMenuRef = useRef("dashboard");
+  const adminLoginReturnRef = useRef<{ key: string; gameId?: string } | null>(null);
   const sharedGameAppliedRef = useRef(false);
   const descriptionCacheRef = useRef(new Map<string, string | null>());
   const descriptionRequestsRef = useRef(new Set<string>());
@@ -491,6 +492,14 @@ export function BoardShelfApp() {
     window.scrollTo({ top: 0, behavior: options.instantScroll ? "auto" : "smooth" });
   }
 
+  function openAdminLogin() {
+    const key = activeMenuRef.current;
+    adminLoginReturnRef.current = key === "registration"
+      ? { key: "dashboard" }
+      : { key, gameId: key === "detail" ? viewingGame?.id : undefined };
+    changePage("registration");
+  }
+
   function mergeGamePatch(gameId: string, patch: Partial<CollectionGame>) {
     setCollection((current) => current.map((game) => game.id === gameId ? { ...game, ...patch } : game));
     setViewingGame((current) => current?.id === gameId ? { ...current, ...patch } : current);
@@ -713,6 +722,11 @@ export function BoardShelfApp() {
       setIsAdmin(true);
       setSessionExpiresAt(session.expiresAt ?? null);
       setLoginPassword("");
+      const returnTarget = adminLoginReturnRef.current;
+      adminLoginReturnRef.current = null;
+      if (returnTarget && returnTarget.key !== "registration") {
+        changePage(returnTarget.key, { gameId: returnTarget.gameId, replaceHistory: true, skipStack: true, instantScroll: true });
+      }
       messageApi.success("관리자 모드로 전환했습니다.");
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : "로그인에 실패했습니다.");
@@ -846,7 +860,7 @@ export function BoardShelfApp() {
   async function saveRecommendationPlaylist() {
     if (!isAdmin) {
       messageApi.info("관리자 로그인 후 플레이리스트로 등록할 수 있습니다.");
-      changePage("registration");
+      openAdminLogin();
       return;
     }
     if (!recommendations.length) {
@@ -969,7 +983,7 @@ export function BoardShelfApp() {
       <App>{messageContext}
         <Layout className="app-shell home-shell">
           <Layout>
-            <Header className="home-header"><div className="home-header-start"><Button className="mobile-nav-trigger" type="text" icon={<MenuOutlined />} aria-label="메뉴 열기" onClick={() => setMobileNavOpen(true)} /><button className="home-brand" type="button" onClick={() => changePage("dashboard")}>Board <span>Shelf</span></button></div><nav className="home-navigation" aria-label="주요 메뉴">{navigationItems.map((item) => <Button key={item.key} type="text" className={activeMenu === item.key ? "active" : undefined} onClick={() => changePage(item.key)}>{item.label}</Button>)}</nav><div className="home-header-actions"><div className="home-owner-summary" aria-label={`${ownerNickname}의 보유 게임 ${ownedGameCount}개`}><Typography.Text>{ownerNickname}</Typography.Text><strong>{ownedGameCount}개 보유</strong></div><Button type="text" icon={<SearchOutlined />} aria-label="게임 검색" onClick={() => changePage("collection")} /><Button type="text" icon={<ShareAltOutlined />} onClick={() => void shareCollection()}>공유</Button><Dropdown trigger={["hover", "click"]} menu={{ items: profileMenuItems, onClick: ({ key }) => { if (key === "logout") void logout(); else if (key === "login") changePage("registration"); } }}><button className={`profile-trigger ${isAdmin ? "active" : "inactive"}`} type="button" aria-label={isAdmin ? "관리자 프로필 메뉴" : "관리자 로그인 메뉴"} onClick={(event) => event.preventDefault()}><Avatar icon={isAdmin ? undefined : <UserOutlined />}>{isAdmin ? "KJ" : null}</Avatar></button></Dropdown></div></Header>
+            <Header className="home-header"><div className="home-header-start"><Button className="mobile-nav-trigger" type="text" icon={<MenuOutlined />} aria-label="메뉴 열기" onClick={() => setMobileNavOpen(true)} /><button className="home-brand" type="button" onClick={() => changePage("dashboard")}>Board <span>Shelf</span></button></div><nav className="home-navigation" aria-label="주요 메뉴">{navigationItems.map((item) => <Button key={item.key} type="text" className={activeMenu === item.key ? "active" : undefined} onClick={() => changePage(item.key)}>{item.label}</Button>)}</nav><div className="home-header-actions"><div className="home-owner-summary" aria-label={`${ownerNickname}의 보유 게임 ${ownedGameCount}개`}><Typography.Text>{ownerNickname}</Typography.Text><strong>{ownedGameCount}개 보유</strong></div><Button type="text" icon={<SearchOutlined />} aria-label="게임 검색" onClick={() => changePage("collection")} /><Button type="text" icon={<ShareAltOutlined />} onClick={() => void shareCollection()}>공유</Button><Dropdown trigger={["hover", "click"]} menu={{ items: profileMenuItems, onClick: ({ key }) => { if (key === "logout") void logout(); else if (key === "login") isAdmin ? changePage("registration") : openAdminLogin(); } }}><button className={`profile-trigger ${isAdmin ? "active" : "inactive"}`} type="button" aria-label={isAdmin ? "관리자 프로필 메뉴" : "관리자 로그인 메뉴"} onClick={(event) => event.preventDefault()}><Avatar icon={isAdmin ? undefined : <UserOutlined />}>{isAdmin ? "KJ" : null}</Avatar></button></Dropdown></div></Header>
             {!isHome && <section className="app-page-title"><div className="page-title-row"><div><Typography.Title level={2}>{currentPage.title}</Typography.Title><Typography.Text type="secondary">{currentPage.description}</Typography.Text></div></div></section>}
             <Content id="dashboard" className={`home-content${isHome ? "" : " app-content"}`}>
               <Row gutter={[20, 20]}>
