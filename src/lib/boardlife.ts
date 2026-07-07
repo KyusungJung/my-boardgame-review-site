@@ -154,8 +154,8 @@ function metadataFromSeed(id: string, seed?: BoardlifeDetailSeed): BoardGameMeta
 }
 
 function parseBoardlifeSummary(id: string, summary: string, seed?: BoardlifeDetailSeed): BoardGameMetadata | undefined {
+  if (!summary.includes("보드게임 종합")) return metadataFromSeed(id, seed);
   const titleMatch = summary.match(/^(.+?)(?:\(([^)]+)\))?은/);
-  if (!titleMatch && seed?.title && !summary.includes("보드게임 종합")) return metadataFromSeed(id, seed);
   const title = titleMatch?.[1]?.trim() || seed?.title?.trim();
   if (!title) return undefined;
 
