@@ -7,13 +7,14 @@ export const preferredRegion = "icn1";
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!/^\d+$/.test(id)) return NextResponse.json({ message: "올바른 게임 ID가 아닙니다." }, { status: 400 });
-  const year = Number(request.nextUrl.searchParams.get("year"));
+  const yearParam = request.nextUrl.searchParams.get("year");
+  const year = yearParam ? Number(yearParam) : undefined;
   const seed = {
     title: request.nextUrl.searchParams.get("title") ?? undefined,
     englishTitle: request.nextUrl.searchParams.get("englishTitle") ?? undefined,
     image: request.nextUrl.searchParams.get("image") ?? undefined,
     thumbnail: request.nextUrl.searchParams.get("thumbnail") ?? undefined,
-    year: Number.isFinite(year) ? year : undefined,
+    year: typeof year === "number" && Number.isFinite(year) ? year : undefined,
   };
 
   try {
