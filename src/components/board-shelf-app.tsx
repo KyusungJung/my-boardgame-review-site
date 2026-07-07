@@ -549,7 +549,12 @@ export function BoardShelfApp() {
     setCandidates([]);
     startDetailTransition(async () => {
       try {
-        const response = await fetch(`/api/boardlife/game/${candidate.id}`);
+        const params = new URLSearchParams({ title: candidate.title });
+        if (candidate.englishTitle) params.set("englishTitle", candidate.englishTitle);
+        if (candidate.image) params.set("image", candidate.image);
+        if (candidate.thumbnail) params.set("thumbnail", candidate.thumbnail);
+        if (candidate.year) params.set("year", String(candidate.year));
+        const response = await fetch(`/api/boardlife/game/${candidate.id}?${params.toString()}`);
         const detail = await response.json() as BoardGameMetadata;
         if (!response.ok) throw new Error("상세 조회 실패");
         const resolved = { ...candidate, ...detail, image: detail.image || candidate.image, thumbnail: detail.thumbnail || candidate.thumbnail };

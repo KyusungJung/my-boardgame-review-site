@@ -15,6 +15,8 @@ type BoardlifeApiItem = {
   photo?: string;
 };
 
+type BoardlifeDetailSeed = Partial<Pick<BoardlifeSearchResult, "title" | "englishTitle" | "year" | "thumbnail" | "image">>;
+
 function getCached<T>(key: string): T | undefined {
   const entry = cache.get(key);
   if (!entry || entry.expiresAt < Date.now()) {
@@ -128,9 +130,33 @@ function isUsableMetadata(metadata: BoardGameMetadata) {
   return metadata.title !== "이름 없음" && metadata.englishTitle !== "boardlife.co.kr";
 }
 
-function parseBoardlifeSummary(id: string, summary: string, image?: string): BoardGameMetadata | undefined {
+function metadataFromSeed(id: string, seed?: BoardlifeDetailSeed): BoardGameMetadata | undefined {
+  const title = seed?.title?.trim();
+  if (!title) return undefined;
+
+  const result: BoardGameMetadata = {
+    id,
+    title,
+    englishTitle: seed?.englishTitle?.trim() ?? "",
+    year: seed?.year,
+    image: seed?.image,
+    thumbnail: seed?.thumbnail ?? seed?.image,
+    sourceUrl: `${BOARDLIFE_BASE_URL}/game/${id}`,
+    description: metadataSummaryDescription({
+      title,
+      englishTitle: seed?.englishTitle?.trim() ?? "",
+    }),
+    autoTags: [],
+    sourceFetchedAt: new Date().toISOString(),
+  };
+  setCached(`detail:${id}`, result, DETAIL_CACHE_TTL);
+  return result;
+}
+
+function parseBoardlifeSummary(id: string, summary: string, seed?: BoardlifeDetailSeed): BoardGameMetadata | undefined {
   const titleMatch = summary.match(/^(.+?)(?:\(([^)]+)\))?은/);
-  const title = titleMatch?.[1]?.trim();
+  if (!titleMatch && seed?.title && !summary.includes("보드게임 종합")) return metadataFromSeed(id, seed);
+  const title = titleMatch?.[1]?.trim() || seed?.title?.trim();
   if (!title) return undefined;
 
   const playerRange = rangeFrom(summary.match(/(\d+\s*[-~]\s*\d+)\s*명/)?.[1]);
@@ -138,13 +164,15 @@ function parseBoardlifeSummary(id: string, summary: string, image?: string): Boa
   const minAge = numberFrom(summary.match(/(\d+)\s*세\s*이상/)?.[1]);
   const complexity = numberFrom(summary.match(/난이도\s*(\d+(?:\.\d+)?)\s*점/)?.[1]);
   const boardlifeRating = numberFrom(summary.match(/게임평점\s*(\d+(?:\.\d+)?)\s*점/)?.[1]);
+  const image = seed?.image ?? seed?.thumbnail;
 
   return {
     id,
     title,
-    englishTitle: titleMatch?.[2]?.trim() ?? "",
+    englishTitle: titleMatch?.[2]?.trim() ?? seed?.englishTitle?.trim() ?? "",
+    year: seed?.year,
     image,
-    thumbnail: image,
+    thumbnail: seed?.thumbnail ?? image,
     sourceUrl: `${BOARDLIFE_BASE_URL}/game/${id}`,
     minPlayers: playerRange?.min,
     maxPlayers: playerRange?.max,
@@ -170,6 +198,7 @@ async function fetchBoardlife(path: string) {
     next: { revalidate: 600 },
   });
 
+  if (response.headers.get("cf-mitigated") === "challenge") throw new Error("Boardlife returned a Cloudflare challenge page.");
   if (!response.ok) throw new Error(`Boardlife request failed (${response.status})`);
   return response;
 }
@@ -218,12 +247,30 @@ async function getBoardlifeGameThroughReader(id: string): Promise<BoardGameMetad
     autoTags: readerTags(bodyText),
     sourceFetchedAt: new Date().toISOString(),
   };
-  setCached(`detail:${id}`, result, DETAIL_CACHE_TTL);
+  if (isUsableMetadata(result)) setCached(`detail:${id}`, result, DETAIL_CACHE_TTL);
   return result;
 }
 
-async function getBoardlifeGameThroughNaver(id: string): Promise<BoardGameMetadata> {
-  const searchUrl = `https://search.naver.com/search.naver?query=${encodeURIComponent(`site:boardlife.co.kr/game/${id} 보드라이프`)}`;
+async function getBoardlifeGameThroughNaver(id: string, seed?: BoardlifeDetailSeed): Promise<BoardGameMetadata> {
+  const queries = [
+    `https://boardlife.co.kr/game/${id}`,
+    `site:boardlife.co.kr/game/${id} 보드라이프`,
+    seed?.title ? `site:boardlife.co.kr/game ${seed.title}` : "",
+    seed?.englishTitle ? `site:boardlife.co.kr/game ${seed.englishTitle}` : "",
+  ].filter(Boolean);
+
+  for (const query of queries) {
+    const result = await getBoardlifeGameFromNaverQuery(id, query, seed).catch(() => undefined);
+    if (result) return result;
+  }
+
+  const seeded = metadataFromSeed(id, seed);
+  if (seeded) return seeded;
+  throw new Error("Naver detail fallback returned no usable game summary.");
+}
+
+async function getBoardlifeGameFromNaverQuery(id: string, query: string, seed?: BoardlifeDetailSeed): Promise<BoardGameMetadata> {
+  const searchUrl = `https://search.naver.com/search.naver?query=${encodeURIComponent(query)}`;
   const response = await fetch(searchUrl, {
     headers: {
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
@@ -234,7 +281,7 @@ async function getBoardlifeGameThroughNaver(id: string): Promise<BoardGameMetada
   if (!response.ok) throw new Error(`Naver detail fallback request failed (${response.status})`);
 
   const $ = cheerio.load(await response.text());
-  let image: string | undefined;
+  let image = seed?.image ?? seed?.thumbnail;
   let summary = "";
 
   $(`a[href*='boardlife.co.kr/game/${id}']`).each((_, element) => {
@@ -246,20 +293,26 @@ async function getBoardlifeGameThroughNaver(id: string): Promise<BoardGameMetada
     }
   });
 
-  const result = parseBoardlifeSummary(id, summary, image);
+  if (!summary && seed?.title) {
+    const bodyText = $("body").text().replace(/\s+/g, " ");
+    const titleIndex = bodyText.indexOf(seed.title);
+    summary = titleIndex >= 0 ? bodyText.slice(titleIndex, titleIndex + 700) : "";
+  }
+
+  const result = parseBoardlifeSummary(id, summary, { ...seed, image });
   if (!result) throw new Error("Naver detail fallback returned no usable game summary.");
   setCached(`detail:${id}`, result, DETAIL_CACHE_TTL);
   return result;
 }
 
-async function getBoardlifeGameFallback(id: string) {
+async function getBoardlifeGameFallback(id: string, seed?: BoardlifeDetailSeed) {
   try {
     const readerResult = await getBoardlifeGameThroughReader(id);
     if (isUsableMetadata(readerResult)) return readerResult;
   } catch {
     // Fall through to the search-result based fallback.
   }
-  return getBoardlifeGameThroughNaver(id);
+  return getBoardlifeGameThroughNaver(id, seed);
 }
 
 export async function searchBoardlife(word: string): Promise<BoardlifeSearchResult[]> {
@@ -287,21 +340,21 @@ export async function searchBoardlife(word: string): Promise<BoardlifeSearchResu
   return results;
 }
 
-export async function getBoardlifeGame(id: string, forceRefresh = false): Promise<BoardGameMetadata> {
+export async function getBoardlifeGame(id: string, forceRefresh = false, seed?: BoardlifeDetailSeed): Promise<BoardGameMetadata> {
   const key = `detail:${id}`;
   const cached = getCached<BoardGameMetadata>(key);
-  if (cached && !forceRefresh) return cached;
+  if (cached && !forceRefresh && (isUsableMetadata(cached) || !seed?.title)) return cached;
 
   let html: string;
   try {
     const response = await fetchBoardlife(`/game/${encodeURIComponent(id)}`);
     html = await response.text();
   } catch {
-    return getBoardlifeGameFallback(id);
+    return getBoardlifeGameFallback(id, seed);
   }
   const $ = cheerio.load(html);
   const bodyText = $("body").text().replace(/\s+/g, " ");
-  if (!isUsableBoardlifeGamePage($, id, bodyText)) return getBoardlifeGameFallback(id);
+  if (!isUsableBoardlifeGamePage($, id, bodyText)) return getBoardlifeGameFallback(id, seed);
 
   const title = $("h1").first().text().replace(/보드게임$/, "").trim() || "이름 없음";
   const image = $("meta[property='og:image']").attr("content") || $("img").filter((_, imageElement) => ($(imageElement).attr("src") ?? "").includes("_w300")).first().attr("src");
