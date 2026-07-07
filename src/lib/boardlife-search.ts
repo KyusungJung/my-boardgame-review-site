@@ -1,4 +1,5 @@
 import type { BoardlifeSearchResult } from "@/lib/types";
+import * as cheerio from "cheerio";
 
 const BOARDLIFE_BASE_URL = "https://boardlife.co.kr";
 const REQUEST_TIMEOUT_MS = 8_000;
@@ -62,6 +63,44 @@ async function fetchSearchItemsThroughReader(boardlifeUrl: string) {
   return parseSearchItems(body);
 }
 
+async function searchBoardlifeThroughNaver(word: string) {
+  const searchUrl = `https://search.naver.com/search.naver?query=${encodeURIComponent(`site:boardlife.co.kr/game ${word}`)}`;
+  const response = await fetch(searchUrl, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+      "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+    },
+    cache: "no-store",
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new Error(`Naver fallback request failed (${response.status})`);
+
+  const $ = cheerio.load(await response.text());
+  const results = new Map<string, BoardlifeSearchResult>();
+  $("a[href*='boardlife.co.kr/game/']").each((_, element) => {
+    const href = $(element).attr("href") ?? "";
+    const id = href.match(/boardlife\.co\.kr\/game\/(\d+)/)?.[1];
+    if (!id || results.has(id)) return;
+
+    const title = $(element).text().replace(/\s+/g, " ").replace(/\s*-\s*보드라이프.*$/, "").trim();
+    if (!title) return;
+
+    const container = $(element).parents().toArray().slice(0, 6).find((parent) => $(parent).find("img[src]").length);
+    const image = container ? $(container).find("img[src]").first().attr("src") : undefined;
+    const englishTitle = $(element).closest("div").text().match(/\(([A-Za-z][^)]+)\)/)?.[1] ?? "";
+
+    results.set(id, {
+      id,
+      title,
+      englishTitle,
+      image,
+      thumbnail: image,
+    });
+  });
+
+  return [...results.values()].slice(0, 10);
+}
+
 export async function searchBoardlife(word: string): Promise<BoardlifeSearchResult[]> {
   const normalizedWord = word.trim();
   if (!normalizedWord) return [];
@@ -70,6 +109,10 @@ export async function searchBoardlife(word: string): Promise<BoardlifeSearchResu
   try {
     return mapSearchItems(await fetchSearchItems(boardlifeUrl));
   } catch {
-    return mapSearchItems(await fetchSearchItemsThroughReader(boardlifeUrl));
+    try {
+      return mapSearchItems(await fetchSearchItemsThroughReader(boardlifeUrl));
+    } catch {
+      return searchBoardlifeThroughNaver(normalizedWord);
+    }
   }
 }
