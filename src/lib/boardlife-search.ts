@@ -38,6 +38,19 @@ function parseSearchItems(body: string) {
   return JSON.parse(body.slice(firstBracket, lastBracket + 2)) as BoardlifeApiItem[];
 }
 
+function normalizeNaverTitle(text: string) {
+  const title = text
+    .replace(/\s+/g, " ")
+    .replace(/\s*-\s*보드라이프.*$/, "")
+    .replace(/\s*\|\s*보드게임.*$/, "")
+    .replace(/\s*게임정보$/, "")
+    .replace(/\s*평가$/, "")
+    .trim();
+
+  if (!title || title.includes("boardlife.co.kr") || title.startsWith("보드라이프") || title.length > 60) return undefined;
+  return title;
+}
+
 async function fetchSearchItems(url: string) {
   const response = await fetch(url, {
     headers: {
@@ -77,22 +90,34 @@ async function searchBoardlifeThroughNaver(word: string) {
 
   const $ = cheerio.load(await response.text());
   const results = new Map<string, BoardlifeSearchResult>();
+  const linkEntries = $("a[href*='boardlife.co.kr/game/']").toArray().map((element) => ({
+    element,
+    href: $(element).attr("href") ?? "",
+    text: $(element).text().replace(/\s+/g, " ").trim(),
+  }));
+
+  const englishTitleById = new Map<string, string>();
+  for (const entry of linkEntries) {
+    const id = entry.href.match(/boardlife\.co\.kr\/game\/(\d+)/)?.[1];
+    const englishTitle = entry.text.match(/\(([A-Za-z][^)]+)\)/)?.[1];
+    if (id && englishTitle && !englishTitleById.has(id)) englishTitleById.set(id, englishTitle);
+  }
+
   $("a[href*='boardlife.co.kr/game/']").each((_, element) => {
     const href = $(element).attr("href") ?? "";
     const id = href.match(/boardlife\.co\.kr\/game\/(\d+)/)?.[1];
     if (!id || results.has(id)) return;
 
-    const title = $(element).text().replace(/\s+/g, " ").replace(/\s*-\s*보드라이프.*$/, "").trim();
+    const title = normalizeNaverTitle($(element).text());
     if (!title) return;
 
-    const container = $(element).parents().toArray().slice(0, 6).find((parent) => $(parent).find("img[src]").length);
-    const image = container ? $(container).find("img[src]").first().attr("src") : undefined;
-    const englishTitle = $(element).closest("div").text().match(/\(([A-Za-z][^)]+)\)/)?.[1] ?? "";
+    const container = $(element).parents().toArray().slice(0, 6).find((parent) => $(parent).find("img[src]").filter((__, imageElement) => !(($(imageElement).attr("src") ?? "").includes("favicon"))).length);
+    const image = container ? $(container).find("img[src]").filter((__, imageElement) => !(($(imageElement).attr("src") ?? "").includes("favicon"))).first().attr("src") : undefined;
 
     results.set(id, {
       id,
       title,
-      englishTitle,
+      englishTitle: englishTitleById.get(id) ?? "",
       image,
       thumbnail: image,
     });
