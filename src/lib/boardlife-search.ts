@@ -30,18 +30,28 @@ function mapSearchItems(items: BoardlifeApiItem[]): BoardlifeSearchResult[] {
     }));
 }
 
+function parseSearchItems(body: string) {
+  const firstBracket = body.search(/\[\s*\{/);
+  const lastBracket = body.lastIndexOf("}]");
+  if (firstBracket === -1 || lastBracket <= firstBracket) throw new Error(`Boardlife returned an invalid search response: ${body.slice(0, 80)}`);
+  return JSON.parse(body.slice(firstBracket, lastBracket + 2)) as BoardlifeApiItem[];
+}
+
 async function fetchSearchItems(url: string) {
   const response = await fetch(url, {
     headers: {
-      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Safari/537.36",
-      Accept: "application/json,text/plain,*/*",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+      Accept: "application/json, text/javascript, */*; q=0.01",
       "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+      Referer: "https://boardlife.co.kr/",
+      "X-Requested-With": "XMLHttpRequest",
+      Cookie: "happy_mobile=off",
     },
     cache: "no-store",
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   if (!response.ok) throw new Error(`Boardlife request failed (${response.status})`);
-  return (await response.json()) as BoardlifeApiItem[];
+  return parseSearchItems(await response.text());
 }
 
 async function fetchSearchItemsThroughReader(boardlifeUrl: string) {
@@ -49,10 +59,7 @@ async function fetchSearchItemsThroughReader(boardlifeUrl: string) {
   if (!response.ok) throw new Error(`Boardlife fallback request failed (${response.status})`);
 
   const body = await response.text();
-  const firstBracket = body.indexOf("[");
-  const lastBracket = body.lastIndexOf("]");
-  if (firstBracket === -1 || lastBracket <= firstBracket) throw new Error("Boardlife fallback returned an invalid response.");
-  return JSON.parse(body.slice(firstBracket, lastBracket + 1)) as BoardlifeApiItem[];
+  return parseSearchItems(body);
 }
 
 export async function searchBoardlife(word: string): Promise<BoardlifeSearchResult[]> {
