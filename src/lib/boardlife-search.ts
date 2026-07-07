@@ -51,6 +51,18 @@ function normalizeNaverTitle(text: string) {
   return title;
 }
 
+function normalizedSearchText(value: string) {
+  return value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
+function isRelevantSearchResult(result: BoardlifeSearchResult, word: string) {
+  const tokens = normalizedSearchText(word).split(/\s+/).filter((token) => token.length > 1);
+  if (!tokens.length) return true;
+
+  const candidateText = normalizedSearchText(`${result.title} ${result.englishTitle}`);
+  return tokens.every((token) => candidateText.includes(token));
+}
+
 async function fetchSearchItems(url: string) {
   const response = await fetch(url, {
     headers: {
@@ -123,7 +135,9 @@ async function searchBoardlifeThroughNaver(word: string) {
     });
   });
 
-  return [...results.values()].slice(0, 10);
+  const orderedResults = [...results.values()];
+  const relevantResults = orderedResults.filter((result) => isRelevantSearchResult(result, word));
+  return (relevantResults.length ? relevantResults : orderedResults).slice(0, 10);
 }
 
 export async function searchBoardlife(word: string): Promise<BoardlifeSearchResult[]> {
