@@ -113,11 +113,59 @@ function readerTags(bodyText: string) {
   return uniqueTags([...bodyText.matchAll(/\[([^\]]+)\]\(https?:\/\/boardlife\.co\.kr\/info\/(?:type|category|mechanisms)\/\d+\)/g)].map((match) => match[1]));
 }
 
+function isChallengePageText(text: string) {
+  return /just a moment|performing security verification|cloudflare|cf-browser-verification|enable javascript/i.test(text);
+}
+
+function isUsableBoardlifeGamePage($: cheerio.CheerioAPI, id: string, bodyText: string) {
+  const canonical = $("link[rel='canonical']").attr("href") ?? "";
+  const description = $("meta[name='description']").attr("content") ?? "";
+  const ogTitle = $("meta[property='og:title']").attr("content") ?? "";
+  return !isChallengePageText(bodyText) && canonical.includes(`/game/${id}`) && Boolean(description || ogTitle);
+}
+
+function isUsableMetadata(metadata: BoardGameMetadata) {
+  return metadata.title !== "이름 없음" && metadata.englishTitle !== "boardlife.co.kr";
+}
+
+function parseBoardlifeSummary(id: string, summary: string, image?: string): BoardGameMetadata | undefined {
+  const titleMatch = summary.match(/^(.+?)(?:\(([^)]+)\))?은/);
+  const title = titleMatch?.[1]?.trim();
+  if (!title) return undefined;
+
+  const playerRange = rangeFrom(summary.match(/(\d+\s*[-~]\s*\d+)\s*명/)?.[1]);
+  const playTime = summary.match(/(\d+\s*[-~]\s*\d+\s*분|\d+\s*분)\s*동안/)?.[1]?.replace(/\s+/g, "");
+  const minAge = numberFrom(summary.match(/(\d+)\s*세\s*이상/)?.[1]);
+  const complexity = numberFrom(summary.match(/난이도\s*(\d+(?:\.\d+)?)\s*점/)?.[1]);
+  const boardlifeRating = numberFrom(summary.match(/게임평점\s*(\d+(?:\.\d+)?)\s*점/)?.[1]);
+
+  return {
+    id,
+    title,
+    englishTitle: titleMatch?.[2]?.trim() ?? "",
+    image,
+    thumbnail: image,
+    sourceUrl: `${BOARDLIFE_BASE_URL}/game/${id}`,
+    minPlayers: playerRange?.min,
+    maxPlayers: playerRange?.max,
+    minAge,
+    playTime,
+    complexity,
+    boardlifeRating,
+    description: summary.slice(0, 1500),
+    autoTags: [],
+    sourceFetchedAt: new Date().toISOString(),
+  };
+}
+
 async function fetchBoardlife(path: string) {
   const response = await fetch(`${BOARDLIFE_BASE_URL}${path}`, {
     headers: {
-      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Safari/537.36",
-      Accept: "application/json,text/plain,*/*",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,application/json,text/plain,*/*;q=0.8",
+      "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+      Referer: "https://boardlife.co.kr/",
+      Cookie: "happy_mobile=off",
     },
     next: { revalidate: 600 },
   });
@@ -174,6 +222,46 @@ async function getBoardlifeGameThroughReader(id: string): Promise<BoardGameMetad
   return result;
 }
 
+async function getBoardlifeGameThroughNaver(id: string): Promise<BoardGameMetadata> {
+  const searchUrl = `https://search.naver.com/search.naver?query=${encodeURIComponent(`site:boardlife.co.kr/game/${id} 보드라이프`)}`;
+  const response = await fetch(searchUrl, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+      "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+    },
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error(`Naver detail fallback request failed (${response.status})`);
+
+  const $ = cheerio.load(await response.text());
+  let image: string | undefined;
+  let summary = "";
+
+  $(`a[href*='boardlife.co.kr/game/${id}']`).each((_, element) => {
+    const text = $(element).text().replace(/\s+/g, " ").trim();
+    if (!summary && text.includes("보드게임 종합")) {
+      summary = text;
+      const container = $(element).parents().toArray().slice(0, 6).find((parent) => $(parent).find("img[src]").filter((__, imageElement) => !(($(imageElement).attr("src") ?? "").includes("favicon"))).length);
+      image = container ? $(container).find("img[src]").filter((__, imageElement) => !(($(imageElement).attr("src") ?? "").includes("favicon"))).first().attr("src") : undefined;
+    }
+  });
+
+  const result = parseBoardlifeSummary(id, summary, image);
+  if (!result) throw new Error("Naver detail fallback returned no usable game summary.");
+  setCached(`detail:${id}`, result, DETAIL_CACHE_TTL);
+  return result;
+}
+
+async function getBoardlifeGameFallback(id: string) {
+  try {
+    const readerResult = await getBoardlifeGameThroughReader(id);
+    if (isUsableMetadata(readerResult)) return readerResult;
+  } catch {
+    // Fall through to the search-result based fallback.
+  }
+  return getBoardlifeGameThroughNaver(id);
+}
+
 export async function searchBoardlife(word: string): Promise<BoardlifeSearchResult[]> {
   const normalizedWord = word.trim();
   if (!normalizedWord) return [];
@@ -209,12 +297,14 @@ export async function getBoardlifeGame(id: string, forceRefresh = false): Promis
     const response = await fetchBoardlife(`/game/${encodeURIComponent(id)}`);
     html = await response.text();
   } catch {
-    return getBoardlifeGameThroughReader(id);
+    return getBoardlifeGameFallback(id);
   }
   const $ = cheerio.load(html);
+  const bodyText = $("body").text().replace(/\s+/g, " ");
+  if (!isUsableBoardlifeGamePage($, id, bodyText)) return getBoardlifeGameFallback(id);
+
   const title = $("h1").first().text().replace(/보드게임$/, "").trim() || "이름 없음";
   const image = $("meta[property='og:image']").attr("content") || $("img").filter((_, imageElement) => ($(imageElement).attr("src") ?? "").includes("_w300")).first().attr("src");
-  const bodyText = $("body").text().replace(/\s+/g, " ");
   const descriptionText = $("meta[name='description']").attr("content") ?? "";
   const metadataText = `${descriptionText} ${bodyText}`;
   const playerSection = textAfterLabel(bodyText, "인원", ["플레이 시간", "사용 연령", "credit 정보"]);
