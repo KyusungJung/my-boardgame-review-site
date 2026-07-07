@@ -63,20 +63,53 @@ function isRelevantSearchResult(result: BoardlifeSearchResult, word: string) {
   return tokens.every((token) => candidateText.includes(token));
 }
 
-async function fetchSearchItems(url: string) {
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-      Accept: "application/json, text/javascript, */*; q=0.01",
-      "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-      Referer: "https://boardlife.co.kr/",
-      "X-Requested-With": "XMLHttpRequest",
-      Cookie: "happy_mobile=off",
-    },
+function boardlifeHeaders(cookie?: string) {
+  return {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    Accept: "application/json, text/javascript, */*; q=0.01",
+    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+    Origin: BOARDLIFE_BASE_URL,
+    Referer: `${BOARDLIFE_BASE_URL}/`,
+    "X-Requested-With": "XMLHttpRequest",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
+    Cookie: cookie ? `${cookie}; happy_mobile=off` : "happy_mobile=off",
+  };
+}
+
+async function fetchBoardlifeCookieHeader() {
+  const response = await fetch(BOARDLIFE_BASE_URL, {
+    headers: boardlifeHeaders(),
     cache: "no-store",
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
+  const getSetCookie = (response.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie;
+  const setCookies = getSetCookie ? getSetCookie.call(response.headers) : response.headers.get("set-cookie")?.split(/,(?=[^;,]+=)/) ?? [];
+  return setCookies.map((cookie) => cookie.split(";")[0]).filter(Boolean).join("; ");
+}
+
+async function fetchSearchItems(url: string) {
+  const response = await fetch(url, {
+    headers: boardlifeHeaders(),
+    cache: "no-store",
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+  if (response.headers.get("cf-mitigated") === "challenge") throw new Error("Boardlife returned a Cloudflare challenge page.");
   if (!response.ok) throw new Error(`Boardlife request failed (${response.status})`);
+  return parseSearchItems(await response.text());
+}
+
+async function fetchSearchItemsWithSession(url: string) {
+  const cookie = await fetchBoardlifeCookieHeader();
+  if (!cookie) throw new Error("Boardlife session cookie was not issued.");
+  const response = await fetch(url, {
+    headers: boardlifeHeaders(cookie),
+    cache: "no-store",
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+  if (response.headers.get("cf-mitigated") === "challenge") throw new Error("Boardlife returned a Cloudflare challenge page.");
+  if (!response.ok) throw new Error(`Boardlife session request failed (${response.status})`);
   return parseSearchItems(await response.text());
 }
 
@@ -149,9 +182,13 @@ export async function searchBoardlife(word: string): Promise<BoardlifeSearchResu
     return mapSearchItems(await fetchSearchItems(boardlifeUrl));
   } catch {
     try {
-      return mapSearchItems(await fetchSearchItemsThroughReader(boardlifeUrl));
+      return mapSearchItems(await fetchSearchItemsWithSession(boardlifeUrl));
     } catch {
-      return searchBoardlifeThroughNaver(normalizedWord);
+      try {
+        return mapSearchItems(await fetchSearchItemsThroughReader(boardlifeUrl));
+      } catch {
+        return searchBoardlifeThroughNaver(normalizedWord);
+      }
     }
   }
 }

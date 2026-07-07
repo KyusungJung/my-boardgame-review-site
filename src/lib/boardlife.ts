@@ -130,6 +130,15 @@ function isUsableMetadata(metadata: BoardGameMetadata) {
   return metadata.title !== "이름 없음" && metadata.englishTitle !== "boardlife.co.kr";
 }
 
+function yearFromGameText(text: string, title?: string, englishTitle?: string) {
+  const escapedTitle = title?.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escapedEnglishTitle = englishTitle?.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const titleYearMatch = escapedTitle ? text.match(new RegExp(`${escapedTitle}.{0,80}?(19\\d{2}|20\\d{2})년`)) : undefined;
+  const englishYearMatch = escapedEnglishTitle ? text.match(new RegExp(`${escapedEnglishTitle}.{0,40}?(19\\d{2}|20\\d{2})년`)) : undefined;
+  const genericYearMatch = text.match(/\b(19\d{2}|20\d{2})년\s*게임평점/);
+  return numberFrom(titleYearMatch?.[1] ?? englishYearMatch?.[1] ?? genericYearMatch?.[1]);
+}
+
 function metadataFromSeed(id: string, seed?: BoardlifeDetailSeed): BoardGameMetadata | undefined {
   const title = seed?.title?.trim();
   if (!title) return undefined;
@@ -165,12 +174,13 @@ function parseBoardlifeSummary(id: string, summary: string, seed?: BoardlifeDeta
   const complexity = numberFrom(summary.match(/난이도\s*(\d+(?:\.\d+)?)\s*점/)?.[1]);
   const boardlifeRating = numberFrom(summary.match(/게임평점\s*(\d+(?:\.\d+)?)\s*점/)?.[1]);
   const image = seed?.image ?? seed?.thumbnail;
+  const englishTitle = titleMatch?.[2]?.trim() ?? seed?.englishTitle?.trim() ?? "";
 
   return {
     id,
     title,
-    englishTitle: titleMatch?.[2]?.trim() ?? seed?.englishTitle?.trim() ?? "",
-    year: seed?.year,
+    englishTitle,
+    year: seed?.year ?? yearFromGameText(summary, title, englishTitle),
     image,
     thumbnail: seed?.thumbnail ?? image,
     sourceUrl: `${BOARDLIFE_BASE_URL}/game/${id}`,
@@ -219,10 +229,12 @@ async function getBoardlifeGameThroughReader(id: string): Promise<BoardGameMetad
   const ageSection = textAfterLabel(bodyText, "사용 연령", ["credit 정보", "링크 정보", "게임 설명"]);
   const englishTitle = bodyText.match(/^## ([A-Za-z][^\n]+)$/m)?.[1] ?? "";
   const image = bodyText.match(/https?:\/\/img\.boardlife\.co\.kr\/[^\s)]+_w300\.[a-zA-Z0-9]+/)?.[0];
+  const year = yearFromGameText(bodyText, title, englishTitle);
   const result: BoardGameMetadata = {
     id,
     title,
     englishTitle,
+    year,
     image,
     thumbnail: image,
     sourceUrl,
@@ -373,11 +385,13 @@ export async function getBoardlifeGame(id: string, forceRefresh = false, seed?: 
   const headingTexts = $("h1, h2, h3").map((_, element) => $(element).text().trim()).get();
   const englishTitle = headingTexts.find((heading) => /[A-Za-z]{3,}/.test(heading) && heading !== title) ?? "";
   const autoTags = uniqueTags($("a").filter((_, element) => /\/info\/(type|category|mechanisms)\/\d+/.test($(element).attr("href") ?? "")).map((_, element) => $(element).text()).get());
+  const year = yearFromGameText(bodyText, title, englishTitle);
 
   const result: BoardGameMetadata = {
     id,
     title,
     englishTitle,
+    year,
     image,
     thumbnail: image,
     sourceUrl: `${BOARDLIFE_BASE_URL}/game/${id}`,
