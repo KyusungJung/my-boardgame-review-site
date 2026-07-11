@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { searchBoardlife } from "@/lib/boardlife-search";
 
 export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
+export const runtime = "edge";
 export const preferredRegion = "icn1";
 
 export async function GET(request: NextRequest) {

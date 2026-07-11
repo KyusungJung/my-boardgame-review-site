@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getBoardlifeGame } from "@/lib/boardlife";
 
 export const dynamic = "force-dynamic";
+export const runtime = "edge";
 export const preferredRegion = "icn1";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
