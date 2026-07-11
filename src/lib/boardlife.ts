@@ -2,6 +2,7 @@ import * as cheerio from "cheerio";
 import type { BoardGameMetadata, BoardlifeSearchResult } from "@/lib/types";
 
 const BOARDLIFE_BASE_URL = "https://boardlife.co.kr";
+const REQUEST_TIMEOUT_MS = 8_000;
 const SEARCH_CACHE_TTL = 1000 * 60 * 10;
 const DETAIL_CACHE_TTL = 1000 * 60 * 60 * 12;
 const cache = new Map<string, { expiresAt: number; value: unknown }>();
@@ -38,6 +39,18 @@ function numberFrom(value?: string) {
 function rangeFrom(value?: string) {
   const match = value?.match(/(\d+)\s*[-~]\s*(\d+)/);
   return match ? { min: Number(match[1]), max: Number(match[2]) } : undefined;
+}
+
+function parseSummaryMetadata(text: string) {
+  const normalizedText = text.replace(/\s+/g, " ").trim();
+  const playerRange = rangeFrom(normalizedText.match(/(\d+\s*[-~]\s*\d+)\s*명/)?.[1]);
+  return {
+    playerRange,
+    minAge: numberFrom(normalizedText.match(/(\d+)\s*세\s*이상/)?.[1]),
+    playTime: normalizedText.match(/(\d+\s*[-~]\s*\d+\s*분|\d+\s*분)\s*동안/)?.[1]?.replace(/\s+/g, ""),
+    complexity: numberFrom(normalizedText.match(/난이도\s*(\d+(?:\.\d+)?)\s*점/)?.[1]),
+    boardlifeRating: numberFrom(normalizedText.match(/게임평점\s*(\d+(?:\.\d+)?)\s*점/)?.[1]),
+  };
 }
 
 function textAfterLabel(bodyText: string, label: string, stopLabels: string[]) {
@@ -168,11 +181,7 @@ function parseBoardlifeSummary(id: string, summary: string, seed?: BoardlifeDeta
   const title = titleMatch?.[1]?.trim() || seed?.title?.trim();
   if (!title) return undefined;
 
-  const playerRange = rangeFrom(summary.match(/(\d+\s*[-~]\s*\d+)\s*명/)?.[1]);
-  const playTime = summary.match(/(\d+\s*[-~]\s*\d+\s*분|\d+\s*분)\s*동안/)?.[1]?.replace(/\s+/g, "");
-  const minAge = numberFrom(summary.match(/(\d+)\s*세\s*이상/)?.[1]);
-  const complexity = numberFrom(summary.match(/난이도\s*(\d+(?:\.\d+)?)\s*점/)?.[1]);
-  const boardlifeRating = numberFrom(summary.match(/게임평점\s*(\d+(?:\.\d+)?)\s*점/)?.[1]);
+  const summaryMetadata = parseSummaryMetadata(summary);
   const image = seed?.image ?? seed?.thumbnail;
   const englishTitle = titleMatch?.[2]?.trim() ?? seed?.englishTitle?.trim() ?? "";
 
@@ -184,28 +193,44 @@ function parseBoardlifeSummary(id: string, summary: string, seed?: BoardlifeDeta
     image,
     thumbnail: seed?.thumbnail ?? image,
     sourceUrl: `${BOARDLIFE_BASE_URL}/game/${id}`,
-    minPlayers: playerRange?.min,
-    maxPlayers: playerRange?.max,
-    minAge,
-    playTime,
-    complexity,
-    boardlifeRating,
+    minPlayers: summaryMetadata.playerRange?.min,
+    maxPlayers: summaryMetadata.playerRange?.max,
+    minAge: summaryMetadata.minAge,
+    playTime: summaryMetadata.playTime,
+    complexity: summaryMetadata.complexity,
+    boardlifeRating: summaryMetadata.boardlifeRating,
     description: summary.slice(0, 1500),
     autoTags: [],
     sourceFetchedAt: new Date().toISOString(),
   };
 }
 
-async function fetchBoardlife(path: string) {
+function boardlifeHeaders(cookie?: string) {
+  return {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,application/json,text/plain,*/*;q=0.8",
+    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+    Referer: "https://boardlife.co.kr/",
+    Cookie: cookie ? `${cookie}; happy_mobile=off` : "happy_mobile=off",
+  };
+}
+
+async function fetchBoardlifeCookieHeader() {
+  const response = await fetch(BOARDLIFE_BASE_URL, {
+    headers: boardlifeHeaders(),
+    cache: "no-store",
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+  const getSetCookie = (response.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie;
+  const setCookies = getSetCookie ? getSetCookie.call(response.headers) : response.headers.get("set-cookie")?.split(/,(?=[^;,]+=)/) ?? [];
+  return setCookies.map((cookie) => cookie.split(";")[0]).filter(Boolean).join("; ");
+}
+
+async function fetchBoardlife(path: string, cookie?: string) {
   const response = await fetch(`${BOARDLIFE_BASE_URL}${path}`, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,application/json,text/plain,*/*;q=0.8",
-      "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-      Referer: "https://boardlife.co.kr/",
-      Cookie: "happy_mobile=off",
-    },
+    headers: boardlifeHeaders(cookie),
     next: { revalidate: 600 },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
 
   if (response.headers.get("cf-mitigated") === "challenge") throw new Error("Boardlife returned a Cloudflare challenge page.");
@@ -362,7 +387,13 @@ export async function getBoardlifeGame(id: string, forceRefresh = false, seed?: 
     const response = await fetchBoardlife(`/game/${encodeURIComponent(id)}`);
     html = await response.text();
   } catch {
-    return getBoardlifeGameFallback(id, seed);
+    try {
+      const cookie = await fetchBoardlifeCookieHeader();
+      const response = await fetchBoardlife(`/game/${encodeURIComponent(id)}`, cookie);
+      html = await response.text();
+    } catch {
+      return getBoardlifeGameFallback(id, seed);
+    }
   }
   const $ = cheerio.load(html);
   const bodyText = $("body").text().replace(/\s+/g, " ");
@@ -372,6 +403,7 @@ export async function getBoardlifeGame(id: string, forceRefresh = false, seed?: 
   const image = $("meta[property='og:image']").attr("content") || $("img").filter((_, imageElement) => ($(imageElement).attr("src") ?? "").includes("_w300")).first().attr("src");
   const descriptionText = $("meta[name='description']").attr("content") ?? "";
   const metadataText = `${descriptionText} ${bodyText}`;
+  const summaryMetadata = parseSummaryMetadata(descriptionText);
   const playerSection = textAfterLabel(bodyText, "인원", ["플레이 시간", "사용 연령", "credit 정보"]);
   const playerRange = rangeFrom(playerSection);
   const bestMatch = playerSection?.match(/베스트\s*:\s*(\d+)인/);
@@ -395,14 +427,14 @@ export async function getBoardlifeGame(id: string, forceRefresh = false, seed?: 
     image,
     thumbnail: image,
     sourceUrl: `${BOARDLIFE_BASE_URL}/game/${id}`,
-    minPlayers: playerRange?.min,
-    maxPlayers: playerRange?.max,
+    minPlayers: playerRange?.min ?? summaryMetadata.playerRange?.min,
+    maxPlayers: playerRange?.max ?? summaryMetadata.playerRange?.max,
     bestPlayers: bestMatch ? Number(bestMatch[1]) : undefined,
     recommendedPlayers: recommendedMatch?.[1],
-    minAge: numberFrom(ageSection),
-    playTime: playTime?.slice(0, 30),
-    complexity: complexityMatch ? Number(complexityMatch[1]) : undefined,
-    boardlifeRating: ratingMatch ? Number(ratingMatch[1]) : undefined,
+    minAge: numberFrom(ageSection) ?? summaryMetadata.minAge,
+    playTime: playTime?.slice(0, 30) ?? summaryMetadata.playTime,
+    complexity: (complexityMatch ? Number(complexityMatch[1]) : undefined) ?? summaryMetadata.complexity,
+    boardlifeRating: (ratingMatch ? Number(ratingMatch[1]) : undefined) ?? summaryMetadata.boardlifeRating,
     languageDependency: languageDependency?.slice(0, 24),
     description: description || metadataSummaryDescription({
       title,
