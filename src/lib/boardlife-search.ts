@@ -201,9 +201,8 @@ function parseBoardlifeSummarySearchResults(markdown: string) {
     const summaryTitleMatch = summary.match(/^(.+?)(?:\(([^)]+)\))?은/);
     const title = summaryTitleMatch?.[1]?.trim() || rawTitle;
     const englishTitle = summaryTitleMatch?.[2]?.trim() ?? "";
-    const year = numberFrom(summary.match(/\b(19\d{2}|20\d{2})\b/)?.[1]);
 
-    if (id && title) addSearchResult(results, { id, title, englishTitle, year });
+    if (id && title) addSearchResult(results, { id, title, englishTitle });
   }
 
   return [...results.values()];
