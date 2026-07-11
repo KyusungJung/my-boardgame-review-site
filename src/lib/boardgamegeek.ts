@@ -2,7 +2,7 @@ import type { BoardGameMetadata, BoardlifeSearchResult } from "@/lib/types";
 
 const REQUEST_TIMEOUT_MS = 12_000;
 
-type BoardGameGeekMetadata = Partial<Pick<BoardGameMetadata, "year" | "minPlayers" | "maxPlayers" | "bestPlayers" | "minAge" | "playTime" | "complexity" | "boardlifeRating">>;
+type BoardGameGeekMetadata = Partial<Pick<BoardGameMetadata, "year" | "image" | "thumbnail" | "minPlayers" | "maxPlayers" | "bestPlayers" | "minAge" | "playTime" | "complexity" | "boardlifeRating">>;
 
 function numberFrom(value?: string) {
   const match = value?.match(/\d+(?:\.\d+)?/);
@@ -40,6 +40,7 @@ async function findBoardGameGeekLink(query: string) {
 
 function parseBoardGameGeekMarkdown(markdown: string): BoardGameGeekMetadata {
   const titleLine = markdown.match(/^# \[[^\]]+\]\(https?:\/\/boardgamegeek\.com\/boardgame(?:expansion)?\/\d+\/[^)]+\)\s*\((19\d{2}|20\d{2})\)/m);
+  const coverImage = markdown.match(/https:\/\/cf\.geekdo-images\.com\/[^\s)]+?\/pic\d+\.(?:jpg|png|webp)/i)?.[0];
   const playerMatch = markdown.match(/(\d+)\s*[–-]\s*(\d+)\s*Players/i);
   const bestMatch = markdown.match(/Best:\s*(\d+)/i);
   const playTimeMatch = markdown.match(/(\d+)\s*Min\s*\n\s*Playing Time/i);
@@ -49,6 +50,8 @@ function parseBoardGameGeekMarkdown(markdown: string): BoardGameGeekMetadata {
 
   return {
     year: numberFrom(titleLine?.[1]),
+    image: coverImage,
+    thumbnail: coverImage,
     minPlayers: numberFrom(playerMatch?.[1]),
     maxPlayers: numberFrom(playerMatch?.[2]),
     bestPlayers: numberFrom(bestMatch?.[1]),
@@ -74,9 +77,14 @@ export async function getBoardGameGeekMetadata(query?: string): Promise<BoardGam
 }
 
 export async function enrichSearchResultWithBoardGameGeek(result: BoardlifeSearchResult): Promise<BoardlifeSearchResult> {
-  if (result.year || !result.englishTitle) return result;
+  if ((result.year && result.image) || !result.englishTitle) return result;
   const metadata = await getBoardGameGeekMetadata(result.englishTitle).catch(() => undefined);
-  return metadata?.year ? { ...result, year: metadata.year } : result;
+  return metadata ? {
+    ...result,
+    year: result.year ?? metadata.year,
+    image: result.image ?? metadata.image,
+    thumbnail: result.thumbnail ?? metadata.thumbnail ?? metadata.image,
+  } : result;
 }
 
 export async function enrichMetadataWithBoardGameGeek(metadata: BoardGameMetadata): Promise<BoardGameMetadata> {
@@ -88,6 +96,8 @@ export async function enrichMetadataWithBoardGameGeek(metadata: BoardGameMetadat
   return {
     ...metadata,
     year: metadata.year ?? fallback.year,
+    image: metadata.image ?? fallback.image,
+    thumbnail: metadata.thumbnail ?? fallback.thumbnail ?? fallback.image,
     minPlayers: metadata.minPlayers ?? fallback.minPlayers,
     maxPlayers: metadata.maxPlayers ?? fallback.maxPlayers,
     bestPlayers: metadata.bestPlayers ?? fallback.bestPlayers,
