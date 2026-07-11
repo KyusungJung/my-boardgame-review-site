@@ -172,8 +172,11 @@ function metadataFromSeed(id: string, seed?: BoardlifeDetailSeed): BoardGameMeta
     autoTags: [],
     sourceFetchedAt: new Date().toISOString(),
   };
-  setCached(`detail:${id}`, result, DETAIL_CACHE_TTL);
   return result;
+}
+
+function hasDetailedMetadata(metadata: BoardGameMetadata) {
+  return Boolean(metadata.minPlayers && metadata.maxPlayers && metadata.playTime && metadata.minAge);
 }
 
 function parseBoardlifeSummary(id: string, summary: string, seed?: BoardlifeDetailSeed): BoardGameMetadata | undefined {
@@ -339,18 +342,22 @@ async function getBoardlifeGameFromNaverQuery(id: string, query: string, seed?: 
 
   const result = parseBoardlifeSummary(id, summary, { ...seed, image });
   if (!result) throw new Error("Naver detail fallback returned no usable game summary.");
-  setCached(`detail:${id}`, result, DETAIL_CACHE_TTL);
   return result;
 }
 
 async function getBoardlifeGameFallback(id: string, seed?: BoardlifeDetailSeed) {
+  let metadata: BoardGameMetadata;
   try {
     const readerResult = await getBoardlifeGameThroughReader(id);
-    if (isUsableMetadata(readerResult)) return enrichMetadataWithBoardGameGeek(readerResult);
+    if (isUsableMetadata(readerResult)) metadata = readerResult;
+    else metadata = await getBoardlifeGameThroughNaver(id, seed);
   } catch {
-    // Fall through to the search-result based fallback.
+    metadata = await getBoardlifeGameThroughNaver(id, seed);
   }
-  return enrichMetadataWithBoardGameGeek(await getBoardlifeGameThroughNaver(id, seed));
+
+  const enriched = await enrichMetadataWithBoardGameGeek(metadata);
+  if (hasDetailedMetadata(enriched)) setCached(`detail:${id}`, enriched, DETAIL_CACHE_TTL);
+  return enriched;
 }
 
 export async function searchBoardlife(word: string): Promise<BoardlifeSearchResult[]> {

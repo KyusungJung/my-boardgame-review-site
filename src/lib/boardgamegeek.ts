@@ -1,6 +1,7 @@
 import type { BoardGameMetadata, BoardlifeSearchResult } from "@/lib/types";
 
 const REQUEST_TIMEOUT_MS = 12_000;
+const RETRY_DELAY_MS = 250;
 
 type BoardGameGeekMetadata = Partial<Pick<BoardGameMetadata, "year" | "image" | "thumbnail" | "minPlayers" | "maxPlayers" | "bestPlayers" | "minAge" | "playTime" | "complexity" | "boardlifeRating">>;
 
@@ -33,9 +34,27 @@ function bestBoardGameGeekLink(markdown: string, query: string) {
 
 async function findBoardGameGeekLink(query: string) {
   const searchUrl = `https://r.jina.ai/http://www.ecosia.org/search?q=${encodeURIComponent(`${query} boardgamegeek`)}`;
-  const response = await fetch(searchUrl, { cache: "no-store", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+  const response = await fetchWithRetry(searchUrl);
   if (!response.ok) throw new Error(`BoardGameGeek search fallback failed (${response.status})`);
   return bestBoardGameGeekLink(await response.text(), query);
+}
+
+async function fetchWithRetry(url: string) {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+      if (response.ok || attempt === 1) return response;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 1) throw error;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+  }
+
+  throw lastError ?? new Error("BoardGameGeek request failed.");
 }
 
 function parseBoardGameGeekMarkdown(markdown: string): BoardGameGeekMetadata {
@@ -70,7 +89,7 @@ export async function getBoardGameGeekMetadata(query?: string): Promise<BoardGam
   const link = await findBoardGameGeekLink(normalizedQuery);
   if (!link) return undefined;
 
-  const response = await fetch(`https://r.jina.ai/http://boardgamegeek.com/boardgame/${link.id}/${link.slug}`, { cache: "no-store", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+  const response = await fetchWithRetry(`https://r.jina.ai/http://boardgamegeek.com/boardgame/${link.id}/${link.slug}`);
   if (!response.ok) throw new Error(`BoardGameGeek detail fallback failed (${response.status})`);
 
   const metadata = parseBoardGameGeekMarkdown(await response.text());
