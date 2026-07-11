@@ -53,7 +53,7 @@ export async function getBoardGameGeekHotness(forceRefresh = false) {
   }
 }
 
-export function rankMeetingGames(games: CollectionGame[], options: MeetingRecommendationOptions, hotnessTitles: string[]): MeetingRecommendation[] {
+export function rankMeetingGames(games: CollectionGame[], options: MeetingRecommendationOptions, hotnessTitles: string[], excludedGameIds: string[] = []): MeetingRecommendation[] {
   const hotnessRank = new Map(hotnessTitles.map((title, index) => [normalizedTitle(title), index + 1]));
   const ranked = games.filter((game) => game.status === "owned" && (game.minPlayers ?? 1) <= options.people && (game.maxPlayers ?? 99) >= options.people && (!options.familyGameOnly || hasAnyTag(game, familyTags))).map((game) => {
     const hasStrategyTag = hasAnyTag(game, strategyTags);
@@ -76,10 +76,12 @@ export function rankMeetingGames(games: CollectionGame[], options: MeetingRecomm
     return { game, score, reasons, weightBreakdown };
   });
   const sorted = ranked.toSorted((first, second) => second.score - first.score || (second.game.personalRating ?? 0) - (first.game.personalRating ?? 0) || second.game.plays - first.game.plays);
-  if (options.limitMode === "count") return sorted.slice(0, options.count);
+  const excluded = new Set(excludedGameIds);
+  const refreshed = excluded.size ? [...sorted.filter((recommendation) => !excluded.has(recommendation.game.id)), ...sorted.filter((recommendation) => excluded.has(recommendation.game.id))] : sorted;
+  if (options.limitMode === "count") return refreshed.slice(0, options.count);
   let usedMinutes = 0;
   const selected: MeetingRecommendation[] = [];
-  for (const recommendation of sorted) {
+  for (const recommendation of refreshed) {
     const minutes = estimatePlayTimeMinutes(recommendation.game.playTime);
     if (selected.length > 0 && usedMinutes + minutes > options.duration) continue;
     selected.push(recommendation);

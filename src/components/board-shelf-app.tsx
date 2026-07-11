@@ -893,7 +893,7 @@ export function BoardShelfApp() {
     }
   }
 
-  async function refreshMeetingRecommendations() {
+  async function refreshMeetingRecommendations(excludeCurrent = true) {
     setLoadingRecommendations(true);
     setRecommendationError(null);
     try {
@@ -903,6 +903,7 @@ export function BoardShelfApp() {
         body: JSON.stringify({
           refresh: true,
           options: { people, familyGameOnly, playStyle, preferredMechanisms, limitMode: recommendationLimitMode, duration: recommendationDuration, count: recommendationGameCount },
+          excludeGameIds: excludeCurrent ? recommendations.map(({ game }) => game.id) : [],
         }),
       });
       const result = await response.json() as MeetingRecommendationResponse | { message?: string };
@@ -921,7 +922,7 @@ export function BoardShelfApp() {
 
   function showMeetingRecommendations() {
     setRecommendationStep(3);
-    void refreshMeetingRecommendations();
+    void refreshMeetingRecommendations(false);
   }
 
   async function saveRecommendationPlaylist() {
