@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import type { BoardGameMetadata, BoardlifeSearchResult } from "@/lib/types";
+import { enrichMetadataWithBoardGameGeek } from "@/lib/boardgamegeek";
 
 const BOARDLIFE_BASE_URL = "https://boardlife.co.kr";
 const REQUEST_TIMEOUT_MS = 8_000;
@@ -345,11 +346,11 @@ async function getBoardlifeGameFromNaverQuery(id: string, query: string, seed?: 
 async function getBoardlifeGameFallback(id: string, seed?: BoardlifeDetailSeed) {
   try {
     const readerResult = await getBoardlifeGameThroughReader(id);
-    if (isUsableMetadata(readerResult)) return readerResult;
+    if (isUsableMetadata(readerResult)) return enrichMetadataWithBoardGameGeek(readerResult);
   } catch {
     // Fall through to the search-result based fallback.
   }
-  return getBoardlifeGameThroughNaver(id, seed);
+  return enrichMetadataWithBoardGameGeek(await getBoardlifeGameThroughNaver(id, seed));
 }
 
 export async function searchBoardlife(word: string): Promise<BoardlifeSearchResult[]> {

@@ -1,4 +1,5 @@
 import type { BoardlifeSearchResult } from "@/lib/types";
+import { enrichSearchResultWithBoardGameGeek } from "@/lib/boardgamegeek";
 import * as cheerio from "cheerio";
 
 const BOARDLIFE_BASE_URL = "https://boardlife.co.kr";
@@ -187,7 +188,8 @@ export async function searchBoardlife(word: string): Promise<BoardlifeSearchResu
       try {
         return mapSearchItems(await fetchSearchItemsThroughReader(boardlifeUrl));
       } catch {
-        return searchBoardlifeThroughNaver(normalizedWord);
+        const naverResults = await searchBoardlifeThroughNaver(normalizedWord);
+        return Promise.all(naverResults.map((result) => enrichSearchResultWithBoardGameGeek(result)));
       }
     }
   }
