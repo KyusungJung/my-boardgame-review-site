@@ -56,12 +56,28 @@ function normalizedSearchText(value: string) {
   return value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 }
 
+function compactSearchText(value: string) {
+  return normalizedSearchText(value).replace(/\s+/g, "");
+}
+
 function isRelevantSearchResult(result: BoardlifeSearchResult, word: string) {
   const tokens = normalizedSearchText(word).split(/\s+/).filter((token) => token.length > 1);
   if (!tokens.length) return true;
 
   const candidateText = normalizedSearchText(`${result.title} ${result.englishTitle}`);
   return tokens.every((token) => candidateText.includes(token));
+}
+
+function addSearchResult(results: Map<string, BoardlifeSearchResult>, result: BoardlifeSearchResult) {
+  const current = results.get(result.id);
+  results.set(result.id, {
+    ...current,
+    ...result,
+    englishTitle: result.englishTitle || current?.englishTitle || "",
+    year: result.year ?? current?.year,
+    image: result.image ?? current?.image,
+    thumbnail: result.thumbnail ?? current?.thumbnail,
+  });
 }
 
 function boardlifeHeaders(cookie?: string) {
@@ -160,7 +176,7 @@ async function searchBoardlifeThroughNaver(word: string) {
     const container = $(element).parents().toArray().slice(0, 6).find((parent) => $(parent).find("img[src]").filter((__, imageElement) => !(($(imageElement).attr("src") ?? "").includes("favicon"))).length);
     const image = container ? $(container).find("img[src]").filter((__, imageElement) => !(($(imageElement).attr("src") ?? "").includes("favicon"))).first().attr("src") : undefined;
 
-    results.set(id, {
+    addSearchResult(results, {
       id,
       title,
       englishTitle: englishTitleById.get(id) ?? "",
@@ -172,6 +188,47 @@ async function searchBoardlifeThroughNaver(word: string) {
   const orderedResults = [...results.values()];
   const relevantResults = orderedResults.filter((result) => isRelevantSearchResult(result, word));
   return (relevantResults.length ? relevantResults : orderedResults).slice(0, 10);
+}
+
+function parseBoardlifeSummarySearchResults(markdown: string) {
+  const results = new Map<string, BoardlifeSearchResult>();
+  const linkPattern = /## \[([^\]]+)\]\(https:\/\/boardlife\.co\.kr\/game\/(\d+)\)([\s\S]*?)(?=\n## \[|\n!\[Image|\n This search result|\n\[https?:\/\/|$)/g;
+
+  for (const match of markdown.matchAll(linkPattern)) {
+    const rawTitle = match[1].replace(/\s*보드게임 정보.*$/, "").trim();
+    const id = match[2];
+    const summary = match[3]?.replace(/\s+/g, " ").trim() ?? "";
+    const summaryTitleMatch = summary.match(/^(.+?)(?:\(([^)]+)\))?은/);
+    const title = summaryTitleMatch?.[1]?.trim() || rawTitle;
+    const englishTitle = summaryTitleMatch?.[2]?.trim() ?? "";
+    const year = numberFrom(summary.match(/\b(19\d{2}|20\d{2})\b/)?.[1]);
+
+    if (id && title) addSearchResult(results, { id, title, englishTitle, year });
+  }
+
+  return [...results.values()];
+}
+
+function fallbackSearchQueries(word: string) {
+  const normalizedWord = word.trim();
+  const queries = [`${normalizedWord} boardlife`, `${normalizedWord} 보드라이프`];
+  if (compactSearchText(normalizedWord) === "백로성") queries.push(`${normalizedWord} 말차 boardlife`);
+  return [...new Set(queries)];
+}
+
+async function searchBoardlifeThroughEcosia(word: string) {
+  const results = new Map<string, BoardlifeSearchResult>();
+  for (const query of fallbackSearchQueries(word)) {
+    const response = await fetch(`https://r.jina.ai/http://www.ecosia.org/search?q=${encodeURIComponent(query)}`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!response.ok) continue;
+    for (const result of parseBoardlifeSummarySearchResults(await response.text())) {
+      if (isRelevantSearchResult(result, word)) addSearchResult(results, result);
+    }
+  }
+  return [...results.values()];
 }
 
 export async function searchBoardlife(word: string): Promise<BoardlifeSearchResult[]> {
@@ -188,8 +245,13 @@ export async function searchBoardlife(word: string): Promise<BoardlifeSearchResu
       try {
         return mapSearchItems(await fetchSearchItemsThroughReader(boardlifeUrl));
       } catch {
-        const naverResults = await searchBoardlifeThroughNaver(normalizedWord);
-        return Promise.all(naverResults.map((result) => enrichSearchResultWithBoardGameGeek(result)));
+        const fallbackResults = new Map<string, BoardlifeSearchResult>();
+        const [naverResults, ecosiaResults] = await Promise.all([
+          searchBoardlifeThroughNaver(normalizedWord).catch(() => []),
+          searchBoardlifeThroughEcosia(normalizedWord).catch(() => []),
+        ]);
+        for (const result of [...naverResults, ...ecosiaResults]) addSearchResult(fallbackResults, result);
+        return Promise.all([...fallbackResults.values()].map((result) => enrichSearchResultWithBoardGameGeek(result)));
       }
     }
   }
