@@ -37,7 +37,7 @@ Before starting any work, classify the task.
 
 ## Task Levels
 
-### Level 1 — Quick / Spark-suitable
+### Level 1 — Quick / Luna-suitable
 
 Use this level for small, local, fast edits.
 
@@ -53,9 +53,14 @@ Examples:
 - Small refactors within one file
 - Simple TypeScript type fixes
 
-Recommended model:
+Recommended Codex 5.6 model:
 
-- GPT-5.3-Codex-Spark
+- `gpt-5.6-luna` for fastest low-cost iteration
+- `gpt-5.6-terra` when a small change still needs stronger judgment
+
+Recommended reasoning:
+
+- `low`
 
 Expected behavior:
 
@@ -83,9 +88,13 @@ Examples:
 - Medium bug fixes
 - Moderate test coverage work
 
-Recommended model:
+Recommended Codex 5.6 model:
 
-- GPT-5.5
+- `gpt-5.6-terra`
+
+Recommended reasoning:
+
+- `medium`
 
 Expected behavior:
 
@@ -117,9 +126,15 @@ Examples:
 - Multi-service changes
 - Cross-cutting codebase cleanup
 
-Recommended model:
+Recommended Codex 5.6 model:
 
-- GPT-5.5 with higher reasoning, if available
+- `gpt-5.6-sol`
+
+Recommended reasoning:
+
+- `high` or `xhigh`
+- Use `max` only when the task is difficult enough that extra latency and cost are justified.
+- Use pro mode only for high-value review, architecture, optimization, or debugging tasks where quality matters more than latency.
 
 Expected behavior:
 
@@ -147,7 +162,7 @@ Stop before making changes and say:
 
 > This task looks like Level 2 or Level 3 work.  
 > The currently selected model may not be ideal.  
-> I recommend switching to GPT-5.5 before continuing.
+> I recommend switching to `gpt-5.6-terra` for Level 2 work or `gpt-5.6-sol` for Level 3 work before continuing.
 
 Then wait for the user’s instruction unless the user has already said to continue anyway.
 
@@ -157,7 +172,7 @@ Proceed normally, but keep the work efficient.
 
 Example:
 
-- If GPT-5.5 is selected for a small CSS change, do not over-plan.
+- If `gpt-5.6-sol` is selected for a small CSS change, do not over-plan.
 - Treat the task as Level 1 and complete it directly.
 
 ---
@@ -306,22 +321,22 @@ Allowed phrasing:
 
 - “I will treat this as Architect → Worker → Reviewer.”
 - “This is Level 3 work, so I will do a planning pass first.”
-- “This looks Spark-suitable, but I cannot switch models automatically.”
+- “This looks Luna-suitable, but I cannot switch models automatically.”
 
 Disallowed phrasing:
 
-- “I switched the subagent to GPT-5.3-Codex-Spark.”
+- “I switched the subagent to `gpt-5.6-luna`.”
 - “The worker agent used a different model.”
-- “The reviewer ran on GPT-5.5.”
+- “The reviewer ran on `gpt-5.6-sol`.”
 - “The model was automatically changed.”
 
 Unless the Codex runtime explicitly supports model-specific subagents, assume all roles use the currently selected model.
 
 ---
 
-# 5. Practical Model Routing Guide
+# 5. Practical Model and Agent Routing Guide
 
-## Prefer GPT-5.3-Codex-Spark for:
+## Prefer `gpt-5.6-luna` for:
 
 - Fast UI changes
 - Small CSS fixes
@@ -334,11 +349,27 @@ Unless the Codex runtime explicitly supports model-specific subagents, assume al
 - Small TypeScript fixes
 - Fast iterative coding
 
-## Prefer GPT-5.5 for:
+Use the Task Router, Worker, Reviewer, and Reporter roles. Skip visible Architect and Planner output unless the small task has ambiguity or risk.
+
+## Prefer `gpt-5.6-terra` for:
+
+- Normal feature work
+- Multi-file frontend changes
+- React or Next.js logic changes
+- API route changes
+- State management changes
+- Form behavior
+- Data fetching changes
+- Medium bug fixes
+- Focused test coverage
+- Practical refactors across a few related files
+
+Use the Task Router, Architect, Planner, Worker, Reviewer, and Reporter roles. Keep the plan concise and make implementation steps verifiable.
+
+## Prefer `gpt-5.6-sol` for:
 
 - Next.js architecture
 - React state architecture
-- Multi-file feature work
 - Complex debugging
 - Performance analysis
 - Security-sensitive work
@@ -352,6 +383,17 @@ Unless the Codex runtime explicitly supports model-specific subagents, assume al
 - CI/CD
 - Production-like troubleshooting
 - Large refactoring
+
+Use the full Task Router → Architect → Planner → Worker → Reviewer → Reporter workflow. For Level 3 work, do a planning pass before implementation and review the final diff strictly.
+
+## Codex 5.6 defaults
+
+- Use `gpt-5.6-terra` as the default development model when the task is not obviously tiny or obviously high-risk.
+- Use `gpt-5.6-luna` for cheap, fast, low-risk edits.
+- Use `gpt-5.6-sol` for quality-first work, broad reasoning, architecture, reviews, and difficult debugging.
+- Use the `gpt-5.6` alias only when the flagship `gpt-5.6-sol` behavior is desired.
+- Start with the recommended reasoning level for the task. Lower reasoning is acceptable when latency or cost matters and the task remains safe.
+- Do not imply Codex automatically changed models. If the selected model is not appropriate, recommend the right model and wait unless the user already said to continue.
 
 ---
 
@@ -516,14 +558,16 @@ Default workflow:
 
 Default model guidance:
 
-- Level 1 → GPT-5.3-Codex-Spark
-- Level 2 → GPT-5.5
-- Level 3 → GPT-5.5 with higher reasoning if available
+- Level 1 → `gpt-5.6-luna` with `low` reasoning, or `gpt-5.6-terra` when extra judgment helps
+- Level 2 → `gpt-5.6-terra` with `medium` reasoning
+- Level 3 → `gpt-5.6-sol` with `high` or `xhigh` reasoning
+- Quality-first exceptional work → `gpt-5.6-sol` with `max` reasoning or pro mode when justified
 
 Default principle:
 
-Use Spark-like behavior for speed.  
-Use GPT-5.5-like behavior for reasoning.  
+Use Luna-like behavior for speed.
+Use Terra-like behavior for everyday engineering.
+Use Sol-like behavior for deep reasoning and quality-first work.
 Do not pretend that automatic model switching happened.
 
 ---
