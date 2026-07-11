@@ -26,6 +26,7 @@ export type BoardGameMetadata = BoardlifeSearchResult & {
 export type CollectionGame = BoardGameMetadata & {
   tags: string[];
   personalRating?: number;
+  recommendationWeight?: number;
   review?: string;
   plays: number;
   status: "owned" | "wishlist" | "played";
@@ -33,6 +34,22 @@ export type CollectionGame = BoardGameMetadata & {
   updatedAt: string;
   photos: PlayPhoto[];
   videos: GameVideo[];
+};
+
+export type MeetingRecommendation = {
+  game: CollectionGame;
+  score: number;
+  reasons: string[];
+  weightBreakdown: Record<string, number>;
+};
+
+export type MeetingRecommendationResponse = {
+  recommendations: MeetingRecommendation[];
+  externalSource: {
+    available: boolean;
+    fetchedAt: string;
+    name: string;
+  };
 };
 
 export type PlayPhoto = { id: string; url: string; caption?: string; createdAt: string };
