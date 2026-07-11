@@ -1,6 +1,6 @@
 import type { BoardGameMetadata, BoardlifeSearchResult } from "@/lib/types";
 
-const REQUEST_TIMEOUT_MS = 8_000;
+const REQUEST_TIMEOUT_MS = 12_000;
 
 type BoardGameGeekMetadata = Partial<Pick<BoardGameMetadata, "year" | "minPlayers" | "maxPlayers" | "bestPlayers" | "minAge" | "playTime" | "complexity" | "boardlifeRating">>;
 
@@ -19,7 +19,7 @@ function titleTokens(value: string) {
 
 function bestBoardGameGeekLink(markdown: string, query: string) {
   const tokens = titleTokens(query);
-  const links = [...markdown.matchAll(/https?:\/\/boardgamegeek\.com\/boardgame\/(\d+)\/([^\s)\]]+)/g)].map((match) => ({
+  const links = [...markdown.matchAll(/https?:\/\/boardgamegeek\.com\/boardgame(?:expansion)?\/(\d+)\/([a-z0-9-]+)/g)].map((match) => ({
     id: match[1],
     slug: match[2],
     url: match[0],
@@ -39,7 +39,7 @@ async function findBoardGameGeekLink(query: string) {
 }
 
 function parseBoardGameGeekMarkdown(markdown: string): BoardGameGeekMetadata {
-  const titleLine = markdown.match(/^# \[[^\]]+\]\(https?:\/\/boardgamegeek\.com\/boardgame\/\d+\/[^)]+\)\s*\((19\d{2}|20\d{2})\)/m);
+  const titleLine = markdown.match(/^# \[[^\]]+\]\(https?:\/\/boardgamegeek\.com\/boardgame(?:expansion)?\/\d+\/[^)]+\)\s*\((19\d{2}|20\d{2})\)/m);
   const playerMatch = markdown.match(/(\d+)\s*[–-]\s*(\d+)\s*Players/i);
   const bestMatch = markdown.match(/Best:\s*(\d+)/i);
   const playTimeMatch = markdown.match(/(\d+)\s*Min\s*\n\s*Playing Time/i);
