@@ -40,7 +40,8 @@ async function findBoardGameGeekLink(query: string) {
 
 function parseBoardGameGeekMarkdown(markdown: string): BoardGameGeekMetadata {
   const titleLine = markdown.match(/^# \[[^\]]+\]\(https?:\/\/boardgamegeek\.com\/boardgame(?:expansion)?\/\d+\/[^)]+\)\s*\((19\d{2}|20\d{2})\)/m);
-  const coverImage = markdown.match(/https:\/\/cf\.geekdo-images\.com\/[^\s)]+?\/pic\d+\.(?:jpg|png|webp)/i)?.[0];
+  const coverImage = markdown.match(/\[!\[[^\]]*Cover Artwork[^\]]*\]\((https:\/\/cf\.geekdo-images\.com\/[^\n]+?pic\d+\.(?:jpg|png|webp))\)\]/i)?.[1]
+    ?? markdown.match(/https:\/\/cf\.geekdo-images\.com\/[^\s\]]*pic\d+\.(?:jpg|png|webp)/i)?.[0];
   const playerMatch = markdown.match(/(\d+)\s*[–-]\s*(\d+)\s*Players/i);
   const bestMatch = markdown.match(/Best:\s*(\d+)/i);
   const playTimeMatch = markdown.match(/(\d+)\s*Min\s*\n\s*Playing Time/i);
