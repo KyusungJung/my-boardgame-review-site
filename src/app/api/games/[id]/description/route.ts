@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBoardlifeGame } from "@/lib/boardlife";
+import { getBoardGameGeekDescription } from "@/lib/boardgamegeek";
 import { hasUsableGameDescription } from "@/lib/game-description";
 import { prisma } from "@/lib/prisma";
 
@@ -25,7 +26,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     if (hasUsableGameDescription(game.description)) return NextResponse.json({ description: game.description, source: "database" });
 
     let description = descriptionFromStoredMetadata(game);
-    let source: "boardlife" | "metadata" = "metadata";
+    let source: "boardlife" | "boardgamegeek" | "metadata" = "metadata";
     try {
       const metadata = await getBoardlifeGame(id, true, { title: game.title, englishTitle: game.englishTitle, year: game.year ?? undefined, image: game.image ?? undefined, thumbnail: game.image ?? undefined });
       if (hasUsableGameDescription(metadata.description)) {
@@ -36,7 +37,15 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       // Boardlife can block server requests; preserve a useful local description instead.
     }
 
-    const updatedGame = source === "boardlife" ? await prisma.game.update({
+    if (source === "metadata") {
+      const boardGameGeekDescription = await getBoardGameGeekDescription(game.englishTitle || game.title).catch(() => undefined);
+      if (hasUsableGameDescription(boardGameGeekDescription)) {
+        description = boardGameGeekDescription ?? description;
+        source = "boardgamegeek";
+      }
+    }
+
+    const updatedGame = source !== "metadata" ? await prisma.game.update({
       where: { boardlifeId: id },
       data: { description },
       select: { updatedAt: true },

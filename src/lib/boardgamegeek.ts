@@ -82,18 +82,50 @@ function parseBoardGameGeekMarkdown(markdown: string): BoardGameGeekMetadata {
   };
 }
 
-export async function getBoardGameGeekMetadata(query?: string): Promise<BoardGameGeekMetadata | undefined> {
+function descriptionFromBoardGameGeekMarkdown(markdown: string) {
+  const classificationIndex = markdown.lastIndexOf("### Classification");
+  const awardsIndex = markdown.search(/\n(?:AWARDS -|### Awards & Honors|### Official Links)/);
+  if (classificationIndex === -1 || awardsIndex <= classificationIndex) return undefined;
+
+  const paragraphs = markdown.slice(classificationIndex, awardsIndex)
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.replace(/\[_?\*{0,2}([^\]]+?)_?\*{0,2}\]\([^)]+\)/g, "$1").replace(/[_*]/g, "").replace(/\s+/g, " ").trim())
+    .filter((paragraph) => paragraph.length >= 80 && !paragraph.startsWith("#") && !paragraph.startsWith("*"));
+  const description = paragraphs.slice(-2).join(" ");
+  return description.length >= 80 ? description.slice(0, 1500) : undefined;
+}
+
+async function translateToKorean(text: string) {
+  const response = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ko&dt=t&q=${encodeURIComponent(text)}`, { cache: "no-store", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+  if (!response.ok) throw new Error(`Translation fallback failed (${response.status})`);
+  const result = await response.json() as Array<Array<[string]>>;
+  const translated = result[0]?.map(([segment]) => segment).join("").replace(/\s+/g, " ").trim();
+  return translated?.slice(0, 1500);
+}
+
+async function getBoardGameGeekMarkdown(query?: string) {
   const normalizedQuery = query?.trim();
   if (!normalizedQuery) return undefined;
-
   const link = await findBoardGameGeekLink(normalizedQuery);
   if (!link) return undefined;
 
   const response = await fetchWithRetry(`https://r.jina.ai/http://boardgamegeek.com/boardgame/${link.id}/${link.slug}`);
   if (!response.ok) throw new Error(`BoardGameGeek detail fallback failed (${response.status})`);
+  return response.text();
+}
 
-  const metadata = parseBoardGameGeekMarkdown(await response.text());
+export async function getBoardGameGeekMetadata(query?: string): Promise<BoardGameGeekMetadata | undefined> {
+  const markdown = await getBoardGameGeekMarkdown(query);
+  if (!markdown) return undefined;
+  const metadata = parseBoardGameGeekMarkdown(markdown);
   return Object.values(metadata).some((value) => value !== undefined) ? metadata : undefined;
+}
+
+export async function getBoardGameGeekDescription(query?: string) {
+  const markdown = await getBoardGameGeekMarkdown(query);
+  const description = markdown ? descriptionFromBoardGameGeekMarkdown(markdown) : undefined;
+  if (!description) return undefined;
+  return translateToKorean(description).catch(() => description);
 }
 
 export async function enrichSearchResultWithBoardGameGeek(result: BoardlifeSearchResult): Promise<BoardlifeSearchResult> {
