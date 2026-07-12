@@ -27,7 +27,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     let description = descriptionFromStoredMetadata(game);
     let source: "boardlife" | "metadata" = "metadata";
     try {
-      const metadata = await getBoardlifeGame(id, false, { title: game.title, englishTitle: game.englishTitle, year: game.year ?? undefined, image: game.image ?? undefined, thumbnail: game.image ?? undefined });
+      const metadata = await getBoardlifeGame(id, true, { title: game.title, englishTitle: game.englishTitle, year: game.year ?? undefined, image: game.image ?? undefined, thumbnail: game.image ?? undefined });
       if (hasUsableGameDescription(metadata.description)) {
         description = metadata.description ?? description;
         source = "boardlife";
@@ -36,14 +36,14 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       // Boardlife can block server requests; preserve a useful local description instead.
     }
 
-    const updatedGame = await prisma.game.update({
+    const updatedGame = source === "boardlife" ? await prisma.game.update({
       where: { boardlifeId: id },
       data: { description },
       select: { updatedAt: true },
     }).catch((error) => {
       console.error("Failed to cache game description", error);
       return null;
-    });
+    }) : null;
     return NextResponse.json({ description, source, updatedAt: updatedGame?.updatedAt.toISOString() });
   } catch {
     return NextResponse.json({ message: "게임 설명을 불러오지 못했습니다." }, { status: 502 });
