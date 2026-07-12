@@ -36,7 +36,16 @@ async function findBoardGameGeekLink(query: string) {
   const searchUrl = `https://r.jina.ai/http://www.ecosia.org/search?q=${encodeURIComponent(`${query} boardgamegeek`)}`;
   const response = await fetchWithRetry(searchUrl);
   if (!response.ok) throw new Error(`BoardGameGeek search fallback failed (${response.status})`);
-  return bestBoardGameGeekLink(await response.text(), query);
+  const ecosiaLink = bestBoardGameGeekLink(await response.text(), query);
+  if (ecosiaLink) return ecosiaLink;
+
+  const naverResponse = await fetch(`https://search.naver.com/search.naver?query=${encodeURIComponent(`"${query}" boardgamegeek`)}`, {
+    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", "Accept-Language": "en-US,en;q=0.9" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+  if (!naverResponse.ok) throw new Error(`BoardGameGeek Naver fallback failed (${naverResponse.status})`);
+  return bestBoardGameGeekLink(await naverResponse.text(), query);
 }
 
 async function fetchWithRetry(url: string) {
