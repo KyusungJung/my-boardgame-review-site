@@ -40,8 +40,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       where: { boardlifeId: id },
       data: { description },
       select: { updatedAt: true },
+    }).catch((error) => {
+      console.error("Failed to cache game description", error);
+      return null;
     });
-    return NextResponse.json({ description, source, updatedAt: updatedGame.updatedAt.toISOString() });
+    return NextResponse.json({ description, source, updatedAt: updatedGame?.updatedAt.toISOString() });
   } catch {
     return NextResponse.json({ message: "게임 설명을 불러오지 못했습니다." }, { status: 502 });
   }
