@@ -52,7 +52,7 @@ import {
   UserOutlined,
   YoutubeOutlined,
 } from "@ant-design/icons";
-import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import { upload } from "@vercel/blob/client";
 import { hasUsableGameDescription } from "@/lib/game-description";
 import type { BoardGameMetadata, BoardlifeSearchResult, CollectionGame, GamePlaylist, GameVideo, MeetingRecommendation, MeetingRecommendationResponse } from "@/lib/types";
@@ -213,10 +213,9 @@ function HomeLoadingSkeleton() {
 }
 
 export function BoardShelfApp() {
-  const initialDashboardSnapshot = useMemo(readDashboardSnapshot, []);
-  const [collection, setCollection] = useState<CollectionGame[]>(() => initialDashboardSnapshot?.games ?? []);
-  const [initialLoading, setInitialLoading] = useState(() => !initialDashboardSnapshot);
-  const [featuredGameId, setFeaturedGameId] = useState<string | null>(() => initialDashboardSnapshot?.featuredGameId ?? null);
+  const [collection, setCollection] = useState<CollectionGame[]>([]);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [featuredGameId, setFeaturedGameId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [collectionQuery, setCollectionQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
@@ -262,7 +261,7 @@ export function BoardShelfApp() {
   const [searchingVideos, setSearchingVideos] = useState(false);
   const [videoSearchError, setVideoSearchError] = useState<string | null>(null);
   const [manualVideoUrl, setManualVideoUrl] = useState("");
-  const [playlists, setPlaylists] = useState<GamePlaylist[]>(() => initialDashboardSnapshot?.playlists ?? []);
+  const [playlists, setPlaylists] = useState<GamePlaylist[]>([]);
   const [playlistTitle, setPlaylistTitle] = useState("");
   const [playlistDescription, setPlaylistDescription] = useState("");
   const [playlistQuery, setPlaylistQuery] = useState("");
@@ -273,9 +272,20 @@ export function BoardShelfApp() {
   const [draggingPlaylistGameId, setDraggingPlaylistGameId] = useState<string | null>(null);
   const [shareTargetPlaylist, setShareTargetPlaylist] = useState<GamePlaylist | null>(null);
   const [isHeroMobileViewport, setIsHeroMobileViewport] = useState(false);
+  const hasCachedDashboardRef = useRef(false);
   const [form] = Form.useForm<CollectionGame>();
   const selectedVideos = Form.useWatch("videos", form) ?? [];
   const [messageApi, messageContext] = message.useMessage();
+
+  useLayoutEffect(() => {
+    const snapshot = readDashboardSnapshot();
+    if (!snapshot) return;
+    hasCachedDashboardRef.current = true;
+    setCollection(snapshot.games);
+    setFeaturedGameId(snapshot.featuredGameId);
+    setPlaylists(snapshot.playlists);
+    setInitialLoading(false);
+  }, []);
 
   useEffect(() => {
     async function loadDashboardData() {
@@ -297,7 +307,7 @@ export function BoardShelfApp() {
         setPlaylists(nextPlaylists);
         saveDashboardSnapshot({ games: loadedGames, playlists: nextPlaylists, featuredGameId: randomFeaturedGame?.id ?? null });
       } catch {
-        if (!initialDashboardSnapshot) {
+        if (!hasCachedDashboardRef.current) {
           setCollection([]);
           setPlaylists([]);
         }
