@@ -94,6 +94,31 @@ const mechanismOptions = [
 ];
 const PLAYLIST_SHARE_PREVIEW_VERSION = "3";
 const ownerNickname = "스플린이";
+const DASHBOARD_CACHE_KEY = "board-shelf:dashboard-cache:v1";
+
+type DashboardSnapshot = {
+  games: CollectionGame[];
+  playlists: GamePlaylist[];
+  featuredGameId: string | null;
+};
+
+function readDashboardSnapshot(): DashboardSnapshot | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const snapshot = JSON.parse(window.sessionStorage.getItem(DASHBOARD_CACHE_KEY) ?? "null") as DashboardSnapshot | null;
+    return snapshot && Array.isArray(snapshot.games) && Array.isArray(snapshot.playlists) ? snapshot : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveDashboardSnapshot(snapshot: DashboardSnapshot) {
+  try {
+    window.sessionStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify(snapshot));
+  } catch {
+    // The cache is only a return-navigation enhancement.
+  }
+}
 
 function hasPersonalRating<T extends Pick<CollectionGame, "personalRating">>(game: T): game is T & { personalRating: number } {
   return typeof game.personalRating === "number" && game.personalRating > 0;
@@ -188,9 +213,10 @@ function HomeLoadingSkeleton() {
 }
 
 export function BoardShelfApp() {
-  const [collection, setCollection] = useState<CollectionGame[]>([]);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [featuredGameId, setFeaturedGameId] = useState<string | null>(null);
+  const initialDashboardSnapshot = useMemo(readDashboardSnapshot, []);
+  const [collection, setCollection] = useState<CollectionGame[]>(() => initialDashboardSnapshot?.games ?? []);
+  const [initialLoading, setInitialLoading] = useState(() => !initialDashboardSnapshot);
+  const [featuredGameId, setFeaturedGameId] = useState<string | null>(() => initialDashboardSnapshot?.featuredGameId ?? null);
   const [query, setQuery] = useState("");
   const [collectionQuery, setCollectionQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
@@ -236,7 +262,7 @@ export function BoardShelfApp() {
   const [searchingVideos, setSearchingVideos] = useState(false);
   const [videoSearchError, setVideoSearchError] = useState<string | null>(null);
   const [manualVideoUrl, setManualVideoUrl] = useState("");
-  const [playlists, setPlaylists] = useState<GamePlaylist[]>([]);
+  const [playlists, setPlaylists] = useState<GamePlaylist[]>(() => initialDashboardSnapshot?.playlists ?? []);
   const [playlistTitle, setPlaylistTitle] = useState("");
   const [playlistDescription, setPlaylistDescription] = useState("");
   const [playlistQuery, setPlaylistQuery] = useState("");
@@ -267,12 +293,16 @@ export function BoardShelfApp() {
         setFeaturedGameId(randomFeaturedGame?.id ?? null);
         setIsAdmin(session.authenticated);
         setSessionExpiresAt(session.authenticated ? session.expiresAt ?? null : null);
-        setPlaylists(Array.isArray(loadedPlaylists) ? loadedPlaylists : []);
+        const nextPlaylists = Array.isArray(loadedPlaylists) ? loadedPlaylists : [];
+        setPlaylists(nextPlaylists);
+        saveDashboardSnapshot({ games: loadedGames, playlists: nextPlaylists, featuredGameId: randomFeaturedGame?.id ?? null });
       } catch {
-        setCollection([]);
+        if (!initialDashboardSnapshot) {
+          setCollection([]);
+          setPlaylists([]);
+        }
         setIsAdmin(false);
         setSessionExpiresAt(null);
-        setPlaylists([]);
       } finally {
         setInitialLoading(false);
       }
