@@ -26,10 +26,11 @@ function bestBoardGameGeekLink(markdown: string, query: string) {
     url: match[0],
   }));
 
-  return links.find((link) => {
+  const exactLink = links.find((link) => {
     const slugText = normalizedTitle(link.slug);
     return tokens.length > 0 && tokens.every((token) => slugText.includes(token));
-  }) ?? links[0];
+  });
+  return exactLink ?? (tokens.length ? undefined : links[0]);
 }
 
 async function findBoardGameGeekLink(query: string) {
