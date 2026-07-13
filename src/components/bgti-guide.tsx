@@ -129,14 +129,13 @@ export function BgtiGuide() {
         <Typography.Paragraph>네 글자는 차례대로 속도(S/D), 무게(L/H), 상호작용(P/A), 몰입 방식(T/M)을 뜻합니다. 유형을 누르면 16Personalities식 상세 프로필을 볼 수 있습니다.</Typography.Paragraph>
       </div>
       <div className="bgti-type-grid">
-        {bgtiTypes.map((type) => <article className={`bgti-type-card ${selectedType.code === type.code ? "active" : ""}`} key={type.code}>
+        {bgtiTypes.map((type) => <button type="button" className={`bgti-type-card ${selectedType.code === type.code ? "active" : ""}`} key={type.code} onClick={() => openTypeProfile(type)}>
           <div className="bgti-card-character" style={characterStyle(bgtiTypes.findIndex((item) => item.code === type.code))} aria-hidden="true" />
           <Tag color="processing">{type.code}</Tag>
           <Typography.Title level={4}>{type.title}</Typography.Title>
           <Typography.Paragraph>{type.summary}</Typography.Paragraph>
           <Typography.Text type="secondary">추천 예시: {type.games.join(" · ")}</Typography.Text>
-          <Button size="small" onClick={() => openTypeProfile(type)}>프로필 보기</Button>
-        </article>)}
+        </button>)}
       </div>
     </section>
 
