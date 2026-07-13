@@ -27,6 +27,16 @@ export type CollectionGame = BoardGameMetadata & {
   tags: string[];
   personalRating?: number;
   recommendationWeight?: number;
+  bgtiWeights?: {
+    speed: number;
+    django: number;
+    light: number;
+    heavy: number;
+    peaceful: number;
+    aggressive: number;
+    thematic: number;
+    mechanic: number;
+  };
   review?: string;
   plays: number;
   status: "owned" | "wishlist" | "played";

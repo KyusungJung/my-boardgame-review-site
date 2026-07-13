@@ -34,6 +34,15 @@ model Game {
   sourceFetchedAt     DateTime?
   personalRating      Float?
   recommendationWeight Float       @default(1)
+  bgtiSpeed           Float       @default(3)
+  bgtiDjango          Float       @default(3)
+  bgtiLight           Float       @default(3)
+  bgtiHeavy           Float       @default(3)
+  bgtiPeaceful        Float       @default(3)
+  bgtiAggressive      Float       @default(3)
+  bgtiThematic        Float       @default(3)
+  bgtiMechanic        Float       @default(3)
+  bgtiWeightsCustomized Boolean     @default(false)
   review              String?
   plays               Int         @default(0)
   status              GameStatus  @default(OWNED)
