@@ -4,6 +4,7 @@ import { Button, Tag, Typography } from "antd";
 import type { CSSProperties } from "react";
 import { useRef, useState } from "react";
 import { bgtiAxes } from "@/lib/bgti";
+import { bgtiTestQuestions } from "@/lib/bgti-test-questions";
 
 const axisPalettes = {
   speed: "#e6a817",
@@ -65,6 +66,10 @@ const pairRows = [
   ["thematic", "mechanic"],
 ] as const;
 
+const answerLabels = ["전혀 아니다", "아니다", "보통이다", "그렇다", "매우 그렇다"];
+const questionsPerPage = 5;
+const axisLabels = ["속도", "무게", "상호작용", "몰입 방식"];
+
 function youtubeSearchUrl(game: string) {
   return `https://www.youtube.com/results?search_query=${encodeURIComponent(`${game} 보드게임 리뷰 설명`)}`;
 }
@@ -77,8 +82,13 @@ function characterStyle(index: number): CSSProperties {
 
 export function BgtiGuide() {
   const typesRef = useRef<HTMLElement | null>(null);
+  const testRef = useRef<HTMLElement | null>(null);
   const profileRef = useRef<HTMLElement | null>(null);
   const [selectedType, setSelectedType] = useState(bgtiTypes[0]);
+  const [isTestOpen, setIsTestOpen] = useState(false);
+  const [testPage, setTestPage] = useState(0);
+  const [testAnswers, setTestAnswers] = useState<(number | null)[]>(() => Array(bgtiTestQuestions.length).fill(null));
+  const [testResult, setTestResult] = useState<string | null>(null);
 
   function scrollToTypes() {
     typesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -89,6 +99,41 @@ export function BgtiGuide() {
     window.setTimeout(() => profileRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
   }
 
+  function startTest() {
+    setTestPage(0);
+    setTestAnswers(Array(bgtiTestQuestions.length).fill(null));
+    setTestResult(null);
+    setIsTestOpen(true);
+    window.setTimeout(() => testRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  }
+
+  function chooseTestAnswer(questionIndex: number, value: number) {
+    setTestAnswers((answers) => answers.map((answer, index) => index === questionIndex ? value : answer));
+  }
+
+  function finishTest() {
+    if (testAnswers.some((answer) => answer === null)) return;
+
+    const scores = { S: 0, L: 0, P: 0, T: 0 };
+    bgtiTestQuestions.forEach((question, index) => {
+      const answer = testAnswers[index] ?? 3;
+      scores[question.axis] += question.reverse ? 6 - answer : answer;
+    });
+    const code = `${scores.S >= 75 ? "S" : "D"}${scores.L >= 75 ? "L" : "H"}${scores.P >= 75 ? "P" : "A"}${scores.T >= 75 ? "T" : "M"}`;
+    const resultType = bgtiTypes.find((type) => type.code === code);
+    if (!resultType) return;
+
+    setTestResult(code);
+    setIsTestOpen(false);
+    openTypeProfile(resultType);
+  }
+
+  const questionStart = testPage * questionsPerPage;
+  const currentQuestions = bgtiTestQuestions.slice(questionStart, questionStart + questionsPerPage);
+  const currentPageComplete = currentQuestions.every((_, index) => testAnswers[questionStart + index] !== null);
+  const totalTestPages = Math.ceil(bgtiTestQuestions.length / questionsPerPage);
+  const answeredCount = testAnswers.filter((answer) => answer !== null).length;
+  const currentAxis = axisLabels[Math.floor(questionStart / 25)];
   const selectedIndex = bgtiTypes.findIndex((type) => type.code === selectedType.code);
 
   return <div className="bgti-guide-page">
@@ -97,10 +142,42 @@ export function BgtiGuide() {
         <Typography.Title>BGTI</Typography.Title>
         <Typography.Title level={2}>보드게임 성향을 4개의 축으로 읽는 방법</Typography.Title>
         <Typography.Paragraph>Board Game Type Indicator는 보드게임 모임에서 자주 갈리는 취향을 빠르게 이해하기 위한 재미있는 프로파일입니다. 속도, 무게, 상호작용, 몰입 방식의 조합으로 16가지 게이머 타입을 살펴봅니다.</Typography.Paragraph>
-        <div className="bgti-hero-actions"><Button type="primary" onClick={scrollToTypes}>16가지 유형 보기</Button></div>
+        <div className="bgti-hero-actions"><Button type="primary" onClick={startTest}>테스트 하기</Button><Button onClick={scrollToTypes}>16가지 유형 보기</Button></div>
       </div>
       <figure className="bgti-hero-art"><img src="/bgti/characters.png" alt="BGTI 8가지 보드게임 성향을 표현한 오리지널 캐릭터 일러스트" /></figure>
     </section>
+
+    {isTestOpen && <section ref={testRef} className="bgti-test-section" aria-label="BGTI 100문항 테스트">
+      <div className="bgti-test-heading">
+        <Typography.Title level={3}>나의 BGTI 100문항 테스트</Typography.Title>
+        <Typography.Paragraph>원문의 4개 성향 축, 100문항, 반전 채점 규칙을 그대로 적용합니다. 한 화면에는 5문항만 보여 드리니, 첫 반응으로 편하게 골라 주세요.</Typography.Paragraph>
+      </div>
+      <div className="bgti-test-progress" aria-label={`${answeredCount} / ${bgtiTestQuestions.length} 문항`}>
+        <div><span>{currentAxis} 편 · 묶음 {testPage % 5 + 1} / 5</span><strong>{answeredCount} / {bgtiTestQuestions.length}</strong></div>
+        <span><i style={{ width: `${(answeredCount / bgtiTestQuestions.length) * 100}%` }} /></span>
+      </div>
+      <div className="bgti-question-list">
+        {currentQuestions.map((question, index) => {
+          const questionIndex = questionStart + index;
+          return <article className="bgti-question-card" key={questionIndex}>
+            <Typography.Text>질문 {questionIndex + 1}</Typography.Text>
+            <Typography.Title level={4}>{question.text}</Typography.Title>
+            <div className="bgti-answer-options">
+              {answerLabels.map((label, answerIndex) => {
+                const value = answerIndex + 1;
+                return <button type="button" key={label} className={testAnswers[questionIndex] === value ? "selected" : ""} onClick={() => chooseTestAnswer(questionIndex, value)}>{label}</button>;
+              })}
+            </div>
+          </article>;
+        })}
+      </div>
+      <div className="bgti-test-actions">
+        <Button disabled={testPage === 0} onClick={() => setTestPage((page) => page - 1)}>이전 5문항</Button>
+        {testPage === totalTestPages - 1
+          ? <Button type="primary" disabled={!currentPageComplete} onClick={finishTest}>결과 보기</Button>
+          : <Button type="primary" disabled={!currentPageComplete} onClick={() => setTestPage((page) => page + 1)}>다음 5문항</Button>}
+      </div>
+    </section>}
 
     <section className="bgti-axis-section">
       <div className="bgti-section-heading">
@@ -140,6 +217,7 @@ export function BgtiGuide() {
     </section>
 
     <section ref={profileRef} className="bgti-profile-detail">
+      {testResult === selectedType.code && <div className="bgti-result-banner"><div><Typography.Text>나의 BGTI 결과</Typography.Text><Typography.Title level={3}>{selectedType.code} · {selectedType.title}</Typography.Title></div><Button onClick={startTest}>다시 테스트하기</Button></div>}
       <div className="bgti-profile-hero">
         <figure className="bgti-profile-character"><div style={characterStyle(Math.max(0, selectedIndex))} aria-label={`${selectedType.code} ${selectedType.title} 캐릭터`} /></figure>
         <div className="bgti-profile-copy">
