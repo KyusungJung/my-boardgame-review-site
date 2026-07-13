@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 import type { BoardGameMetadata, BoardlifeSearchResult } from "@/lib/types";
-import { enrichMetadataWithBoardGameGeek } from "@/lib/boardgamegeek";
+import { enrichMetadataWithBoardGameGeek, getBoardGameGeekDescription } from "@/lib/boardgamegeek";
 
 const BOARDLIFE_BASE_URL = "https://boardlife.co.kr";
 const REQUEST_TIMEOUT_MS = 8_000;
@@ -377,6 +377,8 @@ async function getBoardlifeGameFallback(id: string, seed?: BoardlifeDetailSeed) 
   }
 
   const enriched = await enrichMetadataWithBoardGameGeek(metadata);
+  const boardGameGeekDescription = await getBoardGameGeekDescription(enriched.englishTitle || seed?.englishTitle || enriched.title).catch(() => undefined);
+  if (boardGameGeekDescription) enriched.description = boardGameGeekDescription;
   if (hasDetailedMetadata(enriched)) setCached(`detail:${id}`, enriched, DETAIL_CACHE_TTL);
   return enriched;
 }

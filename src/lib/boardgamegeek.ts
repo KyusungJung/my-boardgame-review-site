@@ -100,7 +100,11 @@ function descriptionFromBoardGameGeekMarkdown(markdown: string) {
     .split(/\n\s*\n/)
     .map((paragraph) => paragraph.replace(/\[_?\*{0,2}([^\]]+?)_?\*{0,2}\]\([^)]+\)/g, "$1").replace(/[_*]/g, "").replace(/\s+/g, " ").trim())
     .filter((paragraph) => paragraph.length >= 80 && !paragraph.startsWith("#") && !paragraph.startsWith("*"));
-  const description = paragraphs.slice(-2).join(" ");
+  const narrativeParagraphs = paragraphs.filter((paragraph) => {
+    if (!/[.!?]$/.test(paragraph)) return false;
+    return !/^(?:The first printing|Contains \d+|This expansion contains)\b|\bPromo\s*\d+\b/i.test(paragraph);
+  });
+  const description = narrativeParagraphs.slice(0, 2).join(" ");
   return description.length >= 80 ? description.slice(0, 1500) : undefined;
 }
 
