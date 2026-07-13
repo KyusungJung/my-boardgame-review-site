@@ -164,15 +164,6 @@ function pickRandomGame(games: CollectionGame[]) {
   return games[Math.floor(Math.random() * games.length)];
 }
 
-function preloadImage(imageUrl: string) {
-  return new Promise<void>((resolve) => {
-    const image = new Image();
-    image.onload = () => resolve();
-    image.onerror = () => resolve();
-    image.src = imageUrl;
-  });
-}
-
 function BoardGameLoading() {
   return <section className="boardgame-loading" aria-live="polite" aria-busy="true"><div className="rolling-dice" aria-hidden="true"><span /><span /><span /><span /><span /></div><Typography.Title level={2}>게임장을 준비하고 있어요</Typography.Title><Typography.Paragraph>컬렉션과 플레이 기록을 불러오는 중입니다.</Typography.Paragraph></section>;
 }
@@ -256,7 +247,6 @@ export function BoardShelfApp() {
   const [draggingPlaylistGameId, setDraggingPlaylistGameId] = useState<string | null>(null);
   const [shareTargetPlaylist, setShareTargetPlaylist] = useState<GamePlaylist | null>(null);
   const [isHeroMobileViewport, setIsHeroMobileViewport] = useState(false);
-  const [homeImagesReady, setHomeImagesReady] = useState(false);
   const [form] = Form.useForm<CollectionGame>();
   const selectedVideos = Form.useWatch("videos", form) ?? [];
   const [messageApi, messageContext] = message.useMessage();
@@ -429,30 +419,9 @@ export function BoardShelfApp() {
   const shouldKeepHomeMounted = isHome || activeMenu === "detail";
   const featuredGame = (featuredGameId ? collection.find((game) => game.id === featuredGameId) : null) ?? updatedGames[0] ?? recentGames[0] ?? mostPlayedGames[0];
   const featuredHeroSummary = featuredGame ? limitTextWithEllipsis(getHomeHeroSummary(featuredGame), isHeroMobileViewport ? HERO_SUMMARY_MAX_LENGTH_MOBILE : HERO_SUMMARY_MAX_LENGTH_DESKTOP) : "";
-  const homeImageUrls = useMemo(() => {
-    const homeGames = [featuredGame, ...updatedGames, ...recentGames, ...mostPlayedGames, ...popularTagGroups.flatMap(({ games }) => games)];
-    return [...new Set(homeGames.flatMap((game) => game ? [game.image, game.thumbnail] : []).filter((imageUrl): imageUrl is string => Boolean(imageUrl)))].slice(0, 18);
-  }, [featuredGame, mostPlayedGames, popularTagGroups, recentGames, updatedGames]);
-  const homeImageKey = homeImageUrls.join("\n");
-  const isHomeVisualLoading = initialLoading || !homeImagesReady;
-
-  useEffect(() => {
-    if (initialLoading) return;
-    if (!homeImageUrls.length) {
-      setHomeImagesReady(true);
-      return;
-    }
-
-    let cancelled = false;
-    setHomeImagesReady(false);
-    void Promise.all(homeImageUrls.map(preloadImage)).then(() => {
-      if (!cancelled) setHomeImagesReady(true);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [homeImageKey, initialLoading]);
+  // The full-screen loader is reserved for the first collection request. Image
+  // preloading must not hide an already rendered home screen after browser back.
+  const isHomeVisualLoading = initialLoading;
   const similarGames = useMemo(() => {
     if (!viewingGame) return [];
     const viewingTags = new Set(viewingGame.tags);
