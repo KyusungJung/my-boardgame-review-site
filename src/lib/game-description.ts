@@ -5,3 +5,8 @@ export function hasUsableGameDescription(description?: string | null) {
   const normalizedDescription = description?.trim();
   return Boolean(normalizedDescription) && !INVALID_DESCRIPTION_PATTERN.test(normalizedDescription ?? "") && !GENERATED_DESCRIPTION_PATTERN.test(normalizedDescription ?? "");
 }
+
+export function hasDisplayableGameDescription(description?: string | null) {
+  const normalizedDescription = description?.trim();
+  return Boolean(normalizedDescription) && !INVALID_DESCRIPTION_PATTERN.test(normalizedDescription ?? "");
+}
