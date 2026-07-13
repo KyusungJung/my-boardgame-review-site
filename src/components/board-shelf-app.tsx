@@ -627,7 +627,12 @@ export function BoardShelfApp() {
     if (!selected) return;
     setRefreshingGameDescription(true);
     try {
-      const response = await fetch(`/api/boardlife/game/${selected.id}?refresh=1`);
+      const searchParams = new URLSearchParams({ title: selected.title, refresh: "1" });
+      if (selected.englishTitle) searchParams.set("englishTitle", selected.englishTitle);
+      if (selected.year) searchParams.set("year", String(selected.year));
+      if (selected.image) searchParams.set("image", selected.image);
+      if (selected.thumbnail) searchParams.set("thumbnail", selected.thumbnail);
+      const response = await fetch(`/api/boardlife/game/${selected.id}?${searchParams}`);
       const metadata = await response.json() as BoardGameMetadata | { message?: string };
       const description = "description" in metadata ? metadata.description : undefined;
       if (!response.ok || !hasUsableGameDescription(description)) throw new Error("Boardlife에서 게임 설명을 찾지 못했습니다.");

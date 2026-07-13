@@ -70,7 +70,7 @@ function uniqueTags(tags: string[]) {
 
 function gameDescriptionFromText(bodyText: string) {
   const description = textAfterLabel(bodyText, "게임 설명", ["+ 더보기", "관련 게임", "카테고리", "테마", "진행방식", "그룹", "게임 정보", "비슷한 게임", "댓글", "추천 게임", "리뷰"])
-    ?.replace(/^[:\-]\s*/, "")
+    ?.replace(/^(?:설명글\s*)?[:\-]?\s*/, "")
     .trim();
 
   return description && description !== "설명글" ? description.slice(0, 1500) : undefined;
@@ -242,6 +242,27 @@ async function fetchBoardlife(path: string, cookie?: string) {
   return response;
 }
 
+async function fetchBoardlifeGameHtml(id: string) {
+  const paths = [`/game/${encodeURIComponent(id)}`, `/game/${encodeURIComponent(id)}?output=1`];
+  let lastError: unknown;
+
+  for (const path of paths) {
+    for (const requestWithCookie of [false, true]) {
+      try {
+        const cookie = requestWithCookie ? await fetchBoardlifeCookieHeader() : undefined;
+        const html = await (await fetchBoardlife(path, cookie)).text();
+        const $ = cheerio.load(html);
+        const bodyText = $("body").text().replace(/\s+/g, " ");
+        if (isUsableBoardlifeGamePage($, id, bodyText)) return html;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+  }
+
+  throw lastError ?? new Error("Boardlife returned no usable game page.");
+}
+
 async function getBoardlifeGameThroughReader(id: string): Promise<BoardGameMetadata> {
   const sourceUrl = `${BOARDLIFE_BASE_URL}/game/${id}`;
   const response = await fetch(`https://r.jina.ai/http://${sourceUrl.replace(/^https?:\/\//, "")}`, { cache: "no-store" });
@@ -390,73 +411,65 @@ export async function getBoardlifeGame(id: string, forceRefresh = false, seed?: 
   const cached = getCached<BoardGameMetadata>(key);
   if (cached && !forceRefresh && (isUsableMetadata(cached) || !seed?.title)) return cached;
 
-  let html: string;
   try {
-    const response = await fetchBoardlife(`/game/${encodeURIComponent(id)}`);
-    html = await response.text();
-  } catch {
-    try {
-      const cookie = await fetchBoardlifeCookieHeader();
-      const response = await fetchBoardlife(`/game/${encodeURIComponent(id)}`, cookie);
-      html = await response.text();
-    } catch {
-      return getBoardlifeGameFallback(id, seed);
-    }
-  }
-  const $ = cheerio.load(html);
-  const bodyText = $("body").text().replace(/\s+/g, " ");
-  if (!isUsableBoardlifeGamePage($, id, bodyText)) return getBoardlifeGameFallback(id, seed);
+    const html = await fetchBoardlifeGameHtml(id);
+    const $ = cheerio.load(html);
+    const bodyText = $("body").text().replace(/\s+/g, " ");
+    if (!isUsableBoardlifeGamePage($, id, bodyText)) return getBoardlifeGameFallback(id, seed);
 
-  const title = $("h1").first().text().replace(/보드게임$/, "").trim() || "이름 없음";
-  const image = $("meta[property='og:image']").attr("content") || $("img").filter((_, imageElement) => ($(imageElement).attr("src") ?? "").includes("_w300")).first().attr("src");
-  const descriptionText = $("meta[name='description']").attr("content") ?? "";
-  const metadataText = `${descriptionText} ${bodyText}`;
-  const summaryMetadata = parseSummaryMetadata(descriptionText);
-  const playerSection = textAfterLabel(bodyText, "인원", ["플레이 시간", "사용 연령", "credit 정보"]);
-  const playerRange = rangeFrom(playerSection);
-  const bestMatch = playerSection?.match(/베스트\s*:\s*(\d+)인/);
-  const recommendedMatch = playerSection?.match(/추천\s*:\s*([^\)\s]+)/);
-  const playTime = textAfterLabel(bodyText, "플레이 시간", ["사용 연령", "credit 정보", "링크 정보"]);
-  const ageSection = textAfterLabel(bodyText, "사용 연령", ["credit 정보", "링크 정보", "게임 설명"]);
-  const ratingMatch = metadataText.match(/게임평점\s*(\d+(?:\.\d+)?)점/);
-  const complexityMatch = metadataText.match(/난이도\s*(\d+(?:\.\d+)?)\s*점/);
-  const languageDependency = textAfterLabel(bodyText, "언어의존도", ["편집", "주요 정보", "인원"]);
-  const description = gameDescriptionFromText(bodyText) ?? descriptionText.trim();
-  const headingTexts = $("h1, h2, h3").map((_, element) => $(element).text().trim()).get();
-  const englishTitle = headingTexts.find((heading) => /[A-Za-z]{3,}/.test(heading) && heading !== title) ?? "";
-  const autoTags = uniqueTags($("a").filter((_, element) => /\/info\/(type|category|mechanisms)\/\d+/.test($(element).attr("href") ?? "")).map((_, element) => $(element).text()).get());
-  const year = yearFromGameText(bodyText, title, englishTitle);
+    const title = $("h1").first().text().replace(/보드게임$/, "").trim() || "이름 없음";
+    const image = $("meta[property='og:image']").attr("content") || $("img").filter((_, imageElement) => ($(imageElement).attr("src") ?? "").includes("_w300")).first().attr("src");
+    const descriptionText = $("meta[name='description']").attr("content") ?? "";
+    const metadataText = `${descriptionText} ${bodyText}`;
+    const summaryMetadata = parseSummaryMetadata(descriptionText);
+    const playerSection = textAfterLabel(bodyText, "인원", ["플레이 시간", "사용 연령", "credit 정보"]);
+    const playerRange = rangeFrom(playerSection);
+    const bestMatch = playerSection?.match(/베스트\s*:\s*(\d+)인/);
+    const recommendedMatch = playerSection?.match(/추천\s*:\s*([^\)\s]+)/);
+    const playTime = textAfterLabel(bodyText, "플레이 시간", ["사용 연령", "credit 정보", "링크 정보"]);
+    const ageSection = textAfterLabel(bodyText, "사용 연령", ["credit 정보", "링크 정보", "게임 설명"]);
+    const ratingMatch = metadataText.match(/게임평점\s*(\d+(?:\.\d+)?)점/);
+    const complexityMatch = metadataText.match(/난이도\s*(\d+(?:\.\d+)?)\s*점/);
+    const languageDependency = textAfterLabel(bodyText, "언어의존도", ["편집", "주요 정보", "인원"]);
+    const description = gameDescriptionFromText(bodyText) ?? descriptionText.trim();
+    const headingTexts = $("h1, h2, h3").map((_, element) => $(element).text().trim()).get();
+    const englishTitle = headingTexts.find((heading) => /[A-Za-z]{3,}/.test(heading) && heading !== title) ?? "";
+    const autoTags = uniqueTags($("a").filter((_, element) => /\/info\/(type|category|mechanisms)\/\d+/.test($(element).attr("href") ?? "")).map((_, element) => $(element).text()).get());
+    const year = yearFromGameText(bodyText, title, englishTitle);
 
-  const result: BoardGameMetadata = {
-    id,
-    title,
-    englishTitle,
-    year,
-    image,
-    thumbnail: image,
-    sourceUrl: `${BOARDLIFE_BASE_URL}/game/${id}`,
-    minPlayers: playerRange?.min ?? summaryMetadata.playerRange?.min,
-    maxPlayers: playerRange?.max ?? summaryMetadata.playerRange?.max,
-    bestPlayers: bestMatch ? Number(bestMatch[1]) : undefined,
-    recommendedPlayers: recommendedMatch?.[1],
-    minAge: numberFrom(ageSection) ?? summaryMetadata.minAge,
-    playTime: playTime?.slice(0, 30) ?? summaryMetadata.playTime,
-    complexity: (complexityMatch ? Number(complexityMatch[1]) : undefined) ?? summaryMetadata.complexity,
-    boardlifeRating: (ratingMatch ? Number(ratingMatch[1]) : undefined) ?? summaryMetadata.boardlifeRating,
-    languageDependency: languageDependency?.slice(0, 24),
-    description: description || metadataSummaryDescription({
+    const result: BoardGameMetadata = {
+      id,
       title,
       englishTitle,
-      minPlayers: playerRange?.min,
-      maxPlayers: playerRange?.max,
-      minAge: numberFrom(ageSection),
-      playTime: playTime?.slice(0, 30),
-      complexity: complexityMatch ? Number(complexityMatch[1]) : undefined,
-    }),
-    autoTags,
-    sourceFetchedAt: new Date().toISOString(),
-  };
+      year,
+      image,
+      thumbnail: image,
+      sourceUrl: `${BOARDLIFE_BASE_URL}/game/${id}`,
+      minPlayers: playerRange?.min ?? summaryMetadata.playerRange?.min,
+      maxPlayers: playerRange?.max ?? summaryMetadata.playerRange?.max,
+      bestPlayers: bestMatch ? Number(bestMatch[1]) : undefined,
+      recommendedPlayers: recommendedMatch?.[1],
+      minAge: numberFrom(ageSection) ?? summaryMetadata.minAge,
+      playTime: playTime?.slice(0, 30) ?? summaryMetadata.playTime,
+      complexity: (complexityMatch ? Number(complexityMatch[1]) : undefined) ?? summaryMetadata.complexity,
+      boardlifeRating: (ratingMatch ? Number(ratingMatch[1]) : undefined) ?? summaryMetadata.boardlifeRating,
+      languageDependency: languageDependency?.slice(0, 24),
+      description: description || metadataSummaryDescription({
+        title,
+        englishTitle,
+        minPlayers: playerRange?.min,
+        maxPlayers: playerRange?.max,
+        minAge: numberFrom(ageSection),
+        playTime: playTime?.slice(0, 30),
+        complexity: complexityMatch ? Number(complexityMatch[1]) : undefined,
+      }),
+      autoTags,
+      sourceFetchedAt: new Date().toISOString(),
+    };
 
-  setCached(key, result, DETAIL_CACHE_TTL);
-  return result;
+    setCached(key, result, DETAIL_CACHE_TTL);
+    return result;
+  } catch {
+    return getBoardlifeGameFallback(id, seed);
+  }
 }
