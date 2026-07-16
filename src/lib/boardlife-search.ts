@@ -42,6 +42,7 @@ function parseSearchItems(body: string) {
 function normalizeNaverTitle(text: string) {
   const title = text
     .replace(/\s+/g, " ")
+    .replace(/\s*새 창 열림\s*$/, "")
     .replace(/\s*-\s*보드라이프.*$/, "")
     .replace(/\s*\|\s*보드게임.*$/, "")
     .replace(/\s*게임정보$/, "")
