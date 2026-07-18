@@ -44,6 +44,7 @@ function normalizeSearchResultTitle(text: string) {
     .replace(/\s+/g, " ")
     .replace(/\s*새 창 열림\s*$/, "")
     .replace(/\s*-\s*보드라이프.*$/, "")
+    .replace(/\s*보드게임\s*정보\s*$/, "")
     .replace(/\s*\|\s*보드게임.*$/, "")
     .replace(/\s*게임정보$/, "")
     .replace(/\s*평가$/, "")
@@ -199,9 +200,10 @@ function parseBoardlifeSummarySearchResults(markdown: string) {
     const rawTitle = normalizeSearchResultTitle(match[1]) ?? "";
     const id = match[2];
     const summary = match[3]?.replace(/\s+/g, " ").trim() ?? "";
-    const summaryTitleMatch = summary.match(/^(.+?)(?:\(([^)]+)\))?은/);
-    const title = summaryTitleMatch?.[1]?.trim() || rawTitle;
-    const englishTitle = summaryTitleMatch?.[2]?.trim() ?? "";
+    const summaryTitleMatch = summary.match(/^(.+?)(?=\([A-Za-z])/);
+    const englishTitleMatch = summary.match(/\(([A-Za-z].*)\)은/);
+    const title = rawTitle || summaryTitleMatch?.[1]?.trim() || "";
+    const englishTitle = englishTitleMatch?.[1]?.trim() ?? "";
 
     if (id && title) addSearchResult(results, { id, title, englishTitle });
   }
