@@ -122,6 +122,7 @@ body { margin: 0; color: rgba(0, 0, 0, .88); font-family: var(--font-sans); }
 .play-photo-section .ant-typography { margin: 0; }
 .play-photo-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .play-photo-grid figure { display: grid; gap: 5px; margin: 0; }
+.play-photo-grid .ant-image { display: block; width: 100%; }
 .play-photo-grid img { width: 100%; aspect-ratio: 1; border-radius: 7px; object-fit: cover; }
 .play-photo-grid figcaption { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .game-description { margin-top: 18px; padding: 16px; border-left: 3px solid #91caff; border-radius: 0 8px 8px 0; background: #fafcff; }.game-description .ant-typography-h5 { margin: 0 0 8px; }.game-description .ant-typography { margin-bottom: 0; white-space: pre-wrap; }
