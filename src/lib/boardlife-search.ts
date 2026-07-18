@@ -39,7 +39,7 @@ function parseSearchItems(body: string) {
   return JSON.parse(body.slice(firstBracket, lastBracket + 2)) as BoardlifeApiItem[];
 }
 
-function normalizeNaverTitle(text: string) {
+function normalizeSearchResultTitle(text: string) {
   const title = text
     .replace(/\s+/g, " ")
     .replace(/\s*새 창 열림\s*$/, "")
@@ -171,7 +171,7 @@ async function searchBoardlifeThroughNaver(word: string) {
     const id = href.match(/boardlife\.co\.kr\/game\/(\d+)/)?.[1];
     if (!id || results.has(id)) return;
 
-    const title = normalizeNaverTitle($(element).text());
+    const title = normalizeSearchResultTitle($(element).text());
     if (!title) return;
 
     const container = $(element).parents().toArray().slice(0, 6).find((parent) => $(parent).find("img[src]").filter((__, imageElement) => !(($(imageElement).attr("src") ?? "").includes("favicon"))).length);
@@ -196,7 +196,7 @@ function parseBoardlifeSummarySearchResults(markdown: string) {
   const linkPattern = /## \[([^\]]+)\]\(https:\/\/boardlife\.co\.kr\/game\/(\d+)\)([\s\S]*?)(?=\n## \[|\n!\[Image|\n This search result|\n\[https?:\/\/|$)/g;
 
   for (const match of markdown.matchAll(linkPattern)) {
-    const rawTitle = match[1].replace(/\s*보드게임 정보.*$/, "").trim();
+    const rawTitle = normalizeSearchResultTitle(match[1]) ?? "";
     const id = match[2];
     const summary = match[3]?.replace(/\s+/g, " ").trim() ?? "";
     const summaryTitleMatch = summary.match(/^(.+?)(?:\(([^)]+)\))?은/);
@@ -250,7 +250,10 @@ export async function searchBoardlife(word: string): Promise<BoardlifeSearchResu
           searchBoardlifeThroughNaver(normalizedWord).catch(() => []),
           searchBoardlifeThroughEcosia(normalizedWord).catch(() => []),
         ]);
-        for (const result of [...naverResults, ...ecosiaResults]) addSearchResult(fallbackResults, result);
+        for (const result of naverResults) addSearchResult(fallbackResults, result);
+        for (const result of ecosiaResults) {
+          if (!fallbackResults.has(result.id)) addSearchResult(fallbackResults, result);
+        }
         return Promise.all([...fallbackResults.values()].map((result) => enrichSearchResultWithBoardGameGeek(result)));
       }
     }
