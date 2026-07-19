@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
       key: process.env.YOUTUBE_API_KEY!,
       part: "snippet",
       type: "video",
-      maxResults: "6",
+      maxResults: "12",
       order: "relevance",
       videoEmbeddable: "true",
       relevanceLanguage: "ko",

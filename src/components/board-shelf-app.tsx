@@ -22,6 +22,7 @@ import {
   List,
   Menu,
   Modal,
+  Pagination,
   Rate,
   Radio,
   Row,
@@ -272,7 +273,8 @@ export function BoardShelfApp() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoUploadQueue = useRef(Promise.resolve());
   const [videoCandidates, setVideoCandidates] = useState<GameVideo[]>([]);
-  const [videoSearchNextPageToken, setVideoSearchNextPageToken] = useState<string | null>(null);
+  const [videoSearchPage, setVideoSearchPage] = useState(1);
+  const [videoSearchPageTokens, setVideoSearchPageTokens] = useState<Array<string | undefined>>([undefined]);
   const [searchingVideos, setSearchingVideos] = useState(false);
   const [videoSearchError, setVideoSearchError] = useState<string | null>(null);
   const [manualVideoUrl, setManualVideoUrl] = useState("");
@@ -541,7 +543,8 @@ export function BoardShelfApp() {
     setSearchError(null);
     setSelected(null);
     setVideoCandidates([]);
-    setVideoSearchNextPageToken(null);
+    setVideoSearchPage(1);
+    setVideoSearchPageTokens([undefined]);
     setVideoSearchError(null);
     setManualVideoUrl("");
     setPhotoCaption("");
@@ -608,7 +611,8 @@ export function BoardShelfApp() {
     setQuery("");
     form.setFieldsValue({ ...game, recommendationWeight: game.recommendationWeight ?? 1, bgtiWeights: normalizeBgtiWeights(game.bgtiWeights), status: game.status ?? "owned" });
     setVideoCandidates([]);
-    setVideoSearchNextPageToken(null);
+    setVideoSearchPage(1);
+    setVideoSearchPageTokens([undefined]);
     setVideoSearchError(null);
     void searchRelatedVideos(game, false);
     changePage("registration");
@@ -720,7 +724,7 @@ export function BoardShelfApp() {
     }
   }
 
-  async function searchRelatedVideos(game: Pick<BoardGameMetadata, "title" | "englishTitle">, autoAdd: boolean, pageToken?: string) {
+  async function searchRelatedVideos(game: Pick<BoardGameMetadata, "title" | "englishTitle">, autoAdd: boolean, pageToken?: string, page = 1) {
     setSearchingVideos(true);
     setVideoSearchError(null);
     try {
@@ -731,11 +735,18 @@ export function BoardShelfApp() {
       if (!response.ok) throw new Error("message" in result ? result.message : "YouTube 영상 검색에 실패했습니다.");
       const videos = result.videos ?? [];
       setVideoCandidates(videos);
-      setVideoSearchNextPageToken(result.nextPageToken ?? null);
+      setVideoSearchPage(page);
+      setVideoSearchPageTokens((current) => {
+        const next = current.slice(0, page);
+        next[page - 1] = pageToken;
+        if (result.nextPageToken) next[page] = result.nextPageToken;
+        return next;
+      });
       if (autoAdd && videos.length) form.setFieldValue("videos", videos.slice(0, 3));
     } catch (error) {
       setVideoCandidates([]);
-      setVideoSearchNextPageToken(null);
+      setVideoSearchPage(1);
+      setVideoSearchPageTokens([undefined]);
       setVideoSearchError(error instanceof Error ? error.message : "YouTube 영상 검색에 실패했습니다.");
     } finally {
       setSearchingVideos(false);
@@ -1180,7 +1191,7 @@ export function BoardShelfApp() {
                       <Form.Item name="status" label="보유 상태" initialValue="owned"><Radio.Group optionType="button" buttonStyle="solid"><Radio.Button value="owned">보유</Radio.Button><Radio.Button value="wishlist">위시리스트</Radio.Button><Radio.Button value="played">플레이 완료</Radio.Button></Radio.Group></Form.Item>
                       <section className="personal-review-form"><div className="personal-review-form-heading"><Typography.Text strong>개인 기록</Typography.Text><Typography.Text type="secondary">공개 메타데이터와 별도로 내 평가를 남겨보세요.</Typography.Text></div><Form.Item name="personalRating" label="나의 평점"><Rate allowHalf /></Form.Item><Form.Item name="recommendationWeight" label="추천 가중치"><InputNumber min={0.25} max={3} step={0.25} precision={2} className="full-width" /></Form.Item><div className="bgti-weight-editor"><div className="bgti-weight-heading"><div><Typography.Text strong>BGTI 가중치</Typography.Text><Typography.Text type="secondary">{bgtiSummary(selectedBgtiWeights as CollectionGame["bgtiWeights"])}</Typography.Text></div><Button size="small" onClick={applyAutoBgtiWeights}>태그/난이도로 자동 계산</Button></div><div className="bgti-weight-grid">{bgtiAxes.map((axis) => <Form.Item key={axis.key} name={["bgtiWeights", axis.key]} label={`${axis.code} ${axis.label}`} extra={axis.description}><Slider min={1} max={5} step={0.1} marks={{ 1: "1", 3: "3", 5: "5" }} /></Form.Item>)}</div></div><Form.Item name="review" label="한줄 리뷰"><Input.TextArea rows={2} placeholder="내가 느낀 재미와 추천 이유를 남겨보세요." /></Form.Item><Form.Item label="플레이 횟수"><div className="play-count-control"><Button htmlType="button" onClick={() => adjustPlayCount(-1)} aria-label="플레이 횟수 줄이기">-</Button><Form.Item name="plays" noStyle><Input type="number" min={0} inputMode="numeric" /></Form.Item><Button htmlType="button" onClick={() => adjustPlayCount(1)} aria-label="플레이 횟수 늘리기">+</Button></div></Form.Item></section>
                       <Form.Item name="videos" hidden getValueProps={() => ({})}><span /></Form.Item>
-                      <div className="video-section"><div className="video-section-heading"><div><Typography.Text strong><YoutubeOutlined /> 관련 YouTube 영상</Typography.Text><Typography.Text type="secondary">등록 시 상위 3개 영상이 자동으로 선택됩니다.</Typography.Text></div><Button size="small" disabled={!videoSearchNextPageToken} loading={searchingVideos} onClick={() => selected && videoSearchNextPageToken && void searchRelatedVideos(selected, false, videoSearchNextPageToken)}>영상 다시 검색</Button></div>{videoSearchError && <Alert type="info" showIcon message={videoSearchError} />}{videoCandidates.length > 0 && <div className="video-candidate-grid">{videoCandidates.map((video) => { const isSelected = selectedVideos.some((item) => item.youtubeId === video.youtubeId); return <button className={`video-candidate ${isSelected ? "selected" : ""}`} key={video.youtubeId} type="button" onClick={() => toggleVideo(video)}><img src={video.thumbnail} alt="" /><span><strong>{video.title}</strong><small>{video.channelName}</small></span><Tag color={isSelected ? "blue" : "default"}>{isSelected ? "연결됨" : "선택"}</Tag></button>; })}</div>}{!searchingVideos && !videoSearchError && videoCandidates.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="검색된 YouTube 영상이 없습니다. 다른 영상 링크를 직접 추가할 수 있습니다." />}<Space.Compact className="manual-video-input"><Input value={manualVideoUrl} onChange={(event) => setManualVideoUrl(event.target.value)} placeholder="YouTube 영상 링크를 직접 추가" onPressEnter={() => void addManualVideo()} /><Button loading={addingManualVideo} onClick={() => void addManualVideo()}>링크 추가</Button></Space.Compact>{selectedVideos.length > 0 && <div className="selected-video-list">{selectedVideos.map((video) => <Tag closable key={video.youtubeId} onClose={() => toggleVideo(video)}>{video.title}</Tag>)}</div>}</div>
+                      <div className="video-section"><div className="video-section-heading"><div><Typography.Text strong><YoutubeOutlined /> 관련 YouTube 영상</Typography.Text><Typography.Text type="secondary">한 페이지에 최대 12개 영상을 보여 줍니다.</Typography.Text></div></div>{videoSearchError && <Alert type="info" showIcon message={videoSearchError} />}{videoCandidates.length > 0 && <><div className="video-candidate-grid">{videoCandidates.map((video) => { const isSelected = selectedVideos.some((item) => item.youtubeId === video.youtubeId); return <button className={`video-candidate ${isSelected ? "selected" : ""}`} key={video.youtubeId} type="button" onClick={() => toggleVideo(video)}><img src={video.thumbnail} alt="" /><span><strong>{video.title}</strong><small>{video.channelName}</small></span><Tag color={isSelected ? "blue" : "default"}>{isSelected ? "연결됨" : "선택"}</Tag></button>; })}</div>{videoSearchPageTokens.length > 1 && <div className="video-pagination"><Typography.Text type="secondary">검색 결과 {videoSearchPage}페이지</Typography.Text><Pagination size="small" current={videoSearchPage} total={videoSearchPageTokens.length} pageSize={1} showSizeChanger={false} onChange={(page) => selected && void searchRelatedVideos(selected, false, videoSearchPageTokens[page - 1], page)} /></div>}</>}{!searchingVideos && !videoSearchError && videoCandidates.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="검색된 YouTube 영상이 없습니다. 다른 영상 링크를 직접 추가할 수 있습니다." />}<Space.Compact className="manual-video-input"><Input value={manualVideoUrl} onChange={(event) => setManualVideoUrl(event.target.value)} placeholder="YouTube 영상 링크를 직접 추가" onPressEnter={() => void addManualVideo()} /><Button loading={addingManualVideo} onClick={() => void addManualVideo()}>링크 추가</Button></Space.Compact>{selectedVideos.length > 0 && <div className="selected-video-list">{selectedVideos.map((video) => <Tag closable key={video.youtubeId} onClose={() => toggleVideo(video)}>{video.title}</Tag>)}</div>}</div>
                       {isEditingSelected && <div className="play-photo-section"><Typography.Text strong>플레이 사진</Typography.Text><Input value={photoCaption} onChange={(event) => setPhotoCaption(event.target.value)} placeholder="사진에 남길 한마디 (선택)" /><Upload.Dragger accept="image/*" multiple={true} showUploadList={false} disabled={uploadingPhoto} beforeUpload={(file) => { queuePlayPhotoUpload(file); return false; }}><p className="ant-upload-drag-icon"><InboxOutlined /></p><p className="ant-upload-text">사진을 여러 장 추가하세요</p><p className="ant-upload-hint">사진 아이콘을 누르거나 이 영역을 탭해 여러 장을 선택할 수 있습니다. 각 파일은 최대 10MB까지 지원합니다.</p></Upload.Dragger><div className="play-photo-grid">{(selected as CollectionGame).photos.map((photo) => <figure key={photo.id}><img src={photo.url} alt={photo.caption || `${selected.title} 플레이 사진`} /><figcaption>{photo.caption || "플레이 기록"}</figcaption><Button size="small" danger onClick={() => void deletePlayPhoto(photo.id)}>삭제</Button></figure>)}</div></div>}
                       <Space className="form-actions"><Button onClick={resetRegistrationState}>취소</Button><Button type="primary" htmlType="submit" loading={loadingDetail || saving}>{isEditingSelected ? "수정 저장" : "컬렉션에 저장"}</Button></Space>
                     </Form> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={loadingDetail ? "게임 정보를 불러오는 중…" : "검색 결과에서 게임을 선택하세요."} />}
