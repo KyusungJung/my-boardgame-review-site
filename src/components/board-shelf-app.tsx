@@ -246,6 +246,7 @@ export function BoardShelfApp() {
   const [activeMenu, setActiveMenu] = useState("dashboard");
   const activeMenuRef = useRef("dashboard");
   const adminLoginReturnRef = useRef<{ key: string; gameId?: string } | null>(null);
+  const editReturnTargetRef = useRef<{ key: string; gameId?: string } | null>(null);
   const skipNextSearchQueryRef = useRef<string | null>(null);
   const sharedGameAppliedRef = useRef(false);
   const descriptionCacheRef = useRef(new Map<string, string | null>());
@@ -548,6 +549,7 @@ export function BoardShelfApp() {
   }
 
   function openRegistrationForNewGame() {
+    editReturnTargetRef.current = null;
     resetRegistrationState();
     changePage("registration");
   }
@@ -600,6 +602,8 @@ export function BoardShelfApp() {
   }
 
   function editGame(game: CollectionGame) {
+    const previousPage = activeMenuRef.current;
+    editReturnTargetRef.current = { key: previousPage, gameId: previousPage === "detail" ? game.id : undefined };
     setSelected(game);
     setQuery("");
     form.setFieldsValue({ ...game, recommendationWeight: game.recommendationWeight ?? 1, bgtiWeights: normalizeBgtiWeights(game.bgtiWeights), status: game.status ?? "owned" });
@@ -784,6 +788,7 @@ export function BoardShelfApp() {
   async function saveGame(values: CollectionGame) {
     if (!selected) return;
     const wasEditing = isEditingSelected;
+    const editReturnTarget = wasEditing ? editReturnTargetRef.current : null;
     const playCount = Number(values.plays);
     const game: CollectionGame = { ...selected, ...values, plays: Number.isFinite(playCount) ? Math.max(0, playCount) : 0, id: selected.id, title: values.title || selected.title, sourceUrl: selected.sourceUrl, sourceFetchedAt: selected.sourceFetchedAt, createdAt: new Date().toISOString() };
     setSaving(true);
@@ -794,9 +799,15 @@ export function BoardShelfApp() {
       const persistedGame = savedGame as CollectionGame;
       descriptionCacheRef.current.set(persistedGame.id, hasUsableGameDescription(persistedGame.description) ? persistedGame.description ?? null : null);
       setCollection((current) => [persistedGame, ...current.filter((item) => item.id !== persistedGame.id)]);
+      setViewingGame((current) => current?.id === persistedGame.id ? persistedGame : current);
       messageApi.success(wasEditing ? `${persistedGame.title} 수정이 완료되었습니다.` : `${persistedGame.title}을(를) 저장했습니다.`);
       resetRegistrationState();
-      changePage(wasEditing ? "dashboard" : "registration");
+      editReturnTargetRef.current = null;
+      if (editReturnTarget) {
+        changePage(editReturnTarget.key, { gameId: editReturnTarget.gameId, replaceHistory: true, skipStack: true, instantScroll: true });
+      } else {
+        changePage("registration");
+      }
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : "게임을 저장하지 못했습니다.");
     } finally {
