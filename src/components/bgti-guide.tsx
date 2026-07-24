@@ -2,9 +2,10 @@
 
 import { Button, Tag, Typography } from "antd";
 import type { CSSProperties } from "react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { bgtiAxes } from "@/lib/bgti";
 import { bgtiTestQuestions } from "@/lib/bgti-test-questions";
+import type { GameVideo } from "@/lib/types";
 
 const axisPalettes = {
   speed: "#e6a817",
@@ -39,6 +40,8 @@ type BgtiType = {
   caution: string;
   games: string[];
 };
+
+type BgtiVideoResult = { game: string; video: GameVideo | null };
 
 const bgtiTypes: BgtiType[] = [
   { code: "SLPT", title: "분위기 메이커", mbtiHint: "ESFP/ENFP의 밝은 사교성", summary: "빠르고 가볍게, 이야기와 웃음을 먼저 여는 타입입니다.", quote: "좋은 게임은 모두가 한 번씩 웃는 장면을 남긴다.", profile: "SLPT는 룰보다 분위기를 먼저 읽습니다. 설명이 길어지는 순간보다 첫 라운드의 웃음, 카드 한 장에서 터지는 이야기, 낯선 사람도 자연스럽게 들어오는 흐름을 소중히 여깁니다.", strength: "새 모임의 긴장을 풀고 게임을 시작하게 만드는 힘이 큽니다. 결과보다 장면을 기억해 플레이 후에도 대화가 이어집니다.", caution: "게임이 너무 건조하거나 장고가 길어지면 금세 에너지가 빠질 수 있습니다. 짧은 라운드와 리액션 포인트가 있는 게임이 잘 맞습니다.", games: ["딕싯", "텔레스트레이션", "저스트 원"] },
@@ -89,6 +92,19 @@ export function BgtiGuide() {
   const [testPage, setTestPage] = useState(0);
   const [testAnswers, setTestAnswers] = useState<(number | null)[]>(() => Array(bgtiTestQuestions.length).fill(null));
   const [testResult, setTestResult] = useState<string | null>(null);
+  const [recommendedVideos, setRecommendedVideos] = useState<BgtiVideoResult[]>([]);
+  const [loadingRecommendedVideos, setLoadingRecommendedVideos] = useState(true);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoadingRecommendedVideos(true);
+    fetch(`/api/youtube/bgti?games=${encodeURIComponent(selectedType.games.join(","))}`, { signal: controller.signal })
+      .then(async (response) => response.ok ? response.json() as Promise<BgtiVideoResult[]> : [])
+      .then((videos) => { if (!controller.signal.aborted) setRecommendedVideos(videos); })
+      .catch(() => { if (!controller.signal.aborted) setRecommendedVideos([]); })
+      .finally(() => { if (!controller.signal.aborted) setLoadingRecommendedVideos(false); });
+    return () => controller.abort();
+  }, [selectedType]);
 
   function scrollToTypes() {
     typesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -231,7 +247,7 @@ export function BgtiGuide() {
       <div className="bgti-profile-columns">
         <article><Typography.Title level={4}>잘 맞는 플레이</Typography.Title><Typography.Paragraph>{selectedType.strength}</Typography.Paragraph></article>
         <article><Typography.Title level={4}>주의할 점</Typography.Title><Typography.Paragraph>{selectedType.caution}</Typography.Paragraph></article>
-        <article><Typography.Title level={4}>추천 영상</Typography.Title><div className="bgti-video-links">{selectedType.games.map((game) => <a href={youtubeSearchUrl(game)} target="_blank" rel="noreferrer" key={game}>{game} 영상 찾기</a>)}</div></article>
+        <article className="bgti-video-panel"><Typography.Title level={4}>추천 영상</Typography.Title><div className="bgti-video-previews">{selectedType.games.map((game) => { const video = recommendedVideos.find((item) => item.game === game)?.video; return video ? <a href={video.url} target="_blank" rel="noreferrer" key={game} className="bgti-video-preview"><img src={video.thumbnail} alt="" /><span><strong>{video.title}</strong><small>{video.channelName ?? "YouTube"}</small></span></a> : <a href={youtubeSearchUrl(game)} target="_blank" rel="noreferrer" key={game} className="bgti-video-preview bgti-video-search"><span><strong>{game}</strong><small>{loadingRecommendedVideos ? "영상 미리보기를 불러오는 중…" : "YouTube에서 영상 찾기"}</small></span></a>; })}</div></article>
       </div>
     </section>
   </div>;
