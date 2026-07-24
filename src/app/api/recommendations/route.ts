@@ -14,13 +14,14 @@ function readOptions(value: unknown): MeetingRecommendationOptions | undefined {
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json().catch(() => undefined) as { options?: unknown; refresh?: boolean; excludeGameIds?: unknown } | undefined;
+  const body = await request.json().catch(() => undefined) as { options?: unknown; refresh?: boolean; excludeGameIds?: unknown; variation?: unknown } | undefined;
   const options = readOptions(body?.options);
   if (!options) return NextResponse.json({ message: "추천 조건이 올바르지 않습니다." }, { status: 400 });
   try {
     const [games, hotness] = await Promise.all([prisma.game.findMany({ include: includeTags, orderBy: { createdAt: "desc" } }), getBoardGameGeekHotness(Boolean(body?.refresh))]);
-    const excludeGameIds = Array.isArray(body?.excludeGameIds) ? body.excludeGameIds.filter((id): id is string => typeof id === "string").slice(0, 12) : [];
-    return NextResponse.json({ recommendations: rankMeetingGames(games.map(serializeGame), options, hotness.titles, excludeGameIds), externalSource: { available: hotness.available, fetchedAt: hotness.fetchedAt, name: "BoardGameGeek Hotness" } });
+    const excludeGameIds = Array.isArray(body?.excludeGameIds) ? body.excludeGameIds.filter((id): id is string => typeof id === "string").slice(0, 60) : [];
+    const variation = Math.min(24, Math.max(0, Math.floor(Number(body?.variation) || 0)));
+    return NextResponse.json({ recommendations: rankMeetingGames(games.map(serializeGame), options, hotness.titles, excludeGameIds, variation), externalSource: { available: hotness.available, fetchedAt: hotness.fetchedAt, name: "BoardGameGeek Hotness" } });
   } catch (error) {
     console.error("Meeting recommendation failed", error);
     return NextResponse.json({ message: "추천을 갱신하지 못했습니다." }, { status: 503 });

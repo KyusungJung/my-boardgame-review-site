@@ -54,6 +54,30 @@ function hasAnyTag(game: CollectionGame, tags: string[]) {
   return game.tags.some((tag) => tags.includes(tag));
 }
 
+function metadataVariationScore(game: CollectionGame, options: MeetingRecommendationOptions, variation: number) {
+  if (variation <= 0) return 0;
+
+  const variant = variation % 3;
+  const minutes = estimatePlayTimeMinutes(game.playTime);
+  const targetComplexity = options.playStyle === "party"
+    ? [1.6, 2.1, 2.6][variant]
+    : options.playStyle === "strategy"
+      ? [2.7, 3.3, 3.9][variant]
+      : [1.9, 2.6, 3.2][variant];
+  const complexityFit = game.complexity === undefined ? 0 : Math.max(0, 4 - Math.abs(game.complexity - targetComplexity) * 2);
+  const timeFit = variant === 0
+    ? Math.max(0, 3 - Math.max(0, minutes - 45) / 30)
+    : variant === 1
+      ? Math.max(0, 3 - Math.abs(minutes - 60) / 30)
+      : Math.min(3, Math.max(0, minutes - 45) / 30);
+  const playerFit = variant === 0
+    ? game.bestPlayers === options.people ? 3 : 0
+    : variant === 1
+      ? game.maxPlayers !== undefined && game.maxPlayers > options.people ? 3 : 0
+      : game.minPlayers !== undefined && game.minPlayers < options.people ? 3 : 0;
+  return Number((complexityFit + timeFit + playerFit).toFixed(2));
+}
+
 function bgtiFitScore(game: CollectionGame, options: MeetingRecommendationOptions) {
   const weights = normalizeBgtiWeights(game.bgtiWeights);
   const target: Partial<Record<BgtiAxis, number>> = { ...playStyleBgtiTargets[options.playStyle] };
@@ -89,7 +113,7 @@ export async function getBoardGameGeekHotness(forceRefresh = false) {
   }
 }
 
-export function rankMeetingGames(games: CollectionGame[], options: MeetingRecommendationOptions, hotnessTitles: string[], excludedGameIds: string[] = []): MeetingRecommendation[] {
+export function rankMeetingGames(games: CollectionGame[], options: MeetingRecommendationOptions, hotnessTitles: string[], excludedGameIds: string[] = [], variation = 0): MeetingRecommendation[] {
   const hotnessRank = new Map(hotnessTitles.map((title, index) => [normalizedTitle(title), index + 1]));
   const ranked = games.filter((game) => game.status === "owned" && (game.minPlayers ?? 1) <= options.people && (game.maxPlayers ?? 99) >= options.people && (!options.familyGameOnly || hasAnyTag(game, familyTags))).map((game) => {
     const hasStrategyTag = hasAnyTag(game, strategyTags);
@@ -106,6 +130,7 @@ export function rankMeetingGames(games: CollectionGame[], options: MeetingRecomm
       playStyle: options.playStyle === "strategy" ? (hasStrategyTag ? 6 : 0) : options.playStyle === "party" ? (hasPartyTag ? 6 : 0) : (hasStrategyTag ? 2 : 0) + (hasPartyTag ? 2 : 0),
       bgtiFit: bgtiFit.score,
       externalTrend: hotnessPosition ? Math.max(1, 7 - Math.floor((hotnessPosition - 1) / 15)) : 0,
+      metadataVariation: metadataVariationScore(game, options, variation),
     };
     const recommendationWeight = Math.min(3, Math.max(0.25, game.recommendationWeight ?? 1));
     const score = Number((Object.values(weightBreakdown).reduce((sum, value) => sum + value, 0) * recommendationWeight).toFixed(2));

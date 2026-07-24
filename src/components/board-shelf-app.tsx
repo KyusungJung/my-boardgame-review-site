@@ -248,6 +248,8 @@ export function BoardShelfApp() {
   const sharedGameAppliedRef = useRef(false);
   const descriptionCacheRef = useRef(new Map<string, string | null>());
   const descriptionRequestsRef = useRef(new Set<string>());
+  const recommendedGameIdsRef = useRef<string[]>([]);
+  const recommendationVariationRef = useRef(0);
   const [navigationStack, setNavigationStack] = useState<string[]>([]);
   const [people, setPeople] = useState(4);
   const [familyGameOnly, setFamilyGameOnly] = useState(false);
@@ -958,7 +960,7 @@ export function BoardShelfApp() {
     }
   }
 
-  async function refreshMeetingRecommendations(excludeCurrent = true) {
+  async function refreshMeetingRecommendations(excludePrevious = true) {
     setLoadingRecommendations(true);
     setRecommendationError(null);
     try {
@@ -968,7 +970,8 @@ export function BoardShelfApp() {
         body: JSON.stringify({
           refresh: true,
           options: { people, familyGameOnly, playStyle, preferredMechanisms, limitMode: recommendationLimitMode, duration: recommendationDuration, count: recommendationGameCount },
-          excludeGameIds: excludeCurrent ? recommendations.map(({ game }) => game.id) : [],
+          excludeGameIds: excludePrevious ? recommendedGameIdsRef.current : [],
+          variation: excludePrevious ? recommendationVariationRef.current + 1 : 0,
         }),
       });
       const result = await response.json() as MeetingRecommendationResponse | { message?: string };
@@ -976,6 +979,9 @@ export function BoardShelfApp() {
       const recommendationResult = result as MeetingRecommendationResponse;
       setRecommendations(recommendationResult.recommendations);
       setRecommendationSource(recommendationResult.externalSource);
+      const currentIds = recommendationResult.recommendations.map(({ game }) => game.id);
+      recommendedGameIdsRef.current = excludePrevious ? [...new Set([...recommendedGameIdsRef.current, ...currentIds])].slice(-60) : currentIds;
+      recommendationVariationRef.current = excludePrevious ? recommendationVariationRef.current + 1 : 0;
     } catch (error) {
       setRecommendations([]);
       setRecommendationSource(null);
@@ -987,6 +993,8 @@ export function BoardShelfApp() {
 
   function showMeetingRecommendations() {
     setRecommendationStep(3);
+    recommendedGameIdsRef.current = [];
+    recommendationVariationRef.current = 0;
     void refreshMeetingRecommendations(false);
   }
 
