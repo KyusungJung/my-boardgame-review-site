@@ -131,7 +131,10 @@ function hasPersonalRating<T extends Pick<CollectionGame, "personalRating">>(gam
 
 function Cover({ game, size = "regular" }: { game: Pick<BoardlifeSearchResult, "title" | "image" | "thumbnail">; size?: "small" | "regular" }) {
   const imageUrl = game.image || game.thumbnail;
-  return imageUrl ? <img className={`cover ${size}`} src={imageUrl} alt={`${game.title} 표지`} /> : <div className={`cover ${size} cover-fallback`} aria-label={`${game.title} 표지 없음`}>{game.title.slice(0, 2)}</div>;
+  const [failedImageUrl, setFailedImageUrl] = useState<string | undefined>();
+  return imageUrl && failedImageUrl !== imageUrl
+    ? <img className={`cover ${size}`} src={imageUrl} alt={`${game.title} 표지`} onError={() => setFailedImageUrl(imageUrl)} />
+    : <div className={`cover ${size} cover-fallback`} aria-label={`${game.title} 표지 없음`}>{game.title.slice(0, 2)}</div>;
 }
 
 function HomeGameRail({ title, games, onGame, onMore }: { title: string; games: CollectionGame[]; onGame: (game: CollectionGame) => void; onMore: () => void }) {
@@ -266,6 +269,7 @@ export function BoardShelfApp() {
   const [tagGallery, setTagGallery] = useState<{ tag: string; games: CollectionGame[]; sortLabel: string } | null>(null);
   const [loadingGameDescriptionId, setLoadingGameDescriptionId] = useState<string | null>(null);
   const [refreshingGameDescription, setRefreshingGameDescription] = useState(false);
+  const [refreshingGameImage, setRefreshingGameImage] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [photoCaption, setPhotoCaption] = useState("");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -645,28 +649,27 @@ export function BoardShelfApp() {
       });
   }
 
-  async function refreshGameDescription() {
+  async function refreshGameMetadata(fields: Array<"description" | "image">) {
     if (!selected) return;
-    setRefreshingGameDescription(true);
+    const isDescriptionRefresh = fields.includes("description");
+    if (isDescriptionRefresh) setRefreshingGameDescription(true);
+    if (fields.includes("image")) setRefreshingGameImage(true);
     try {
-      const searchParams = new URLSearchParams({ title: selected.title, refresh: "1" });
-      if (selected.englishTitle) searchParams.set("englishTitle", selected.englishTitle);
-      if (selected.year) searchParams.set("year", String(selected.year));
-      if (selected.image) searchParams.set("image", selected.image);
-      if (selected.thumbnail) searchParams.set("thumbnail", selected.thumbnail);
-      const response = await fetch(`/api/boardlife/game/${selected.id}?${searchParams}`);
-      const metadata = await response.json() as BoardGameMetadata | { message?: string };
-      const description = "description" in metadata ? metadata.description : undefined;
-      if (!response.ok || !hasUsableGameDescription(description)) throw new Error("Boardlife에서 게임 설명을 찾지 못했습니다.");
-      form.setFieldValue("description", description);
-      descriptionCacheRef.current.set(selected.id, description ?? null);
-      setSelected((current) => current?.id === selected.id ? { ...current, description } : current);
-      mergeGamePatch(selected.id, { description });
-      messageApi.success("게임 설명을 새로 불러왔습니다. 수정 저장을 누르면 반영됩니다.");
+      const response = await fetch(`/api/games/${selected.id}/metadata`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fields }) });
+      const result = await response.json() as { game?: CollectionGame; message?: string };
+      if (!response.ok || !result.game) throw new Error(result.message ?? "최신 게임 정보를 저장하지 못했습니다.");
+      const refreshedGame = result.game;
+      if (fields.includes("description")) {
+        form.setFieldValue("description", refreshedGame.description);
+        descriptionCacheRef.current.set(refreshedGame.id, refreshedGame.description ?? null);
+      }
+      mergeGamePatch(refreshedGame.id, refreshedGame);
+      messageApi.success(`${fields.includes("description") ? "게임 설명" : "표지 사진"}을 최신 정보로 저장했습니다.`);
     } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : "게임 설명을 갱신하지 못했습니다.");
+      messageApi.error(error instanceof Error ? error.message : "게임 정보를 갱신하지 못했습니다.");
     } finally {
-      setRefreshingGameDescription(false);
+      if (isDescriptionRefresh) setRefreshingGameDescription(false);
+      if (fields.includes("image")) setRefreshingGameImage(false);
     }
   }
 
@@ -1182,8 +1185,8 @@ export function BoardShelfApp() {
                       <Row gutter={10}><Col span={12}><Form.Item name="minPlayers" label="최소 인원"><InputNumber min={1} max={20} className="full-width" /></Form.Item></Col><Col span={12}><Form.Item name="maxPlayers" label="최대 인원"><InputNumber min={1} max={20} className="full-width" /></Form.Item></Col><Col span={12}><Form.Item name="bestPlayers" label="베스트 인원"><InputNumber min={1} max={20} className="full-width" /></Form.Item></Col><Col span={12}><Form.Item name="minAge" label="권장 연령"><InputNumber min={0} max={99} className="full-width" /></Form.Item></Col></Row>
                       <Row gutter={10}><Col span={12}><Form.Item name="playTime" label="플레이 시간"><Input placeholder="예: 30-45분" /></Form.Item></Col><Col span={12}><Form.Item name="complexity" label="난이도"><InputNumber min={0} max={5} step={0.1} className="full-width" /></Form.Item></Col></Row>
                       <Form.Item name="tags" label="태그"><Select mode="tags" placeholder="태그를 입력하세요" options={collectionTags.map((tag) => ({ value: tag }))} /></Form.Item>
-                      <Form.Item name="description" label="게임 설명" extra="직접 고쳐 쓸 수 있습니다. 갱신한 내용은 수정 저장을 눌러 반영하세요."><Input.TextArea rows={6} placeholder="게임 설명을 입력하세요." /></Form.Item>
-                      <Button className="description-refresh-button" loading={refreshingGameDescription} onClick={() => void refreshGameDescription()}>Boardlife에서 게임 설명 갱신</Button>
+                      <Form.Item name="description" label="게임 설명" extra="직접 고쳐 쓸 수 있습니다. 검색 갱신은 즉시 저장되며, 직접 수정한 내용은 수정 저장으로 반영됩니다."><Input.TextArea rows={6} placeholder="게임 설명을 입력하세요." /></Form.Item>
+                      <Space wrap className="metadata-refresh-actions"><Button className="description-refresh-button" loading={refreshingGameDescription} onClick={() => void refreshGameMetadata(["description"])}>게임 설명 검색·갱신</Button><Button loading={refreshingGameImage} onClick={() => void refreshGameMetadata(["image"])}>표지 사진 검색·갱신</Button></Space>
                       <Form.Item name="status" label="보유 상태" initialValue="owned"><Radio.Group optionType="button" buttonStyle="solid"><Radio.Button value="owned">보유</Radio.Button><Radio.Button value="wishlist">위시리스트</Radio.Button><Radio.Button value="played">플레이 완료</Radio.Button></Radio.Group></Form.Item>
                       <section className="personal-review-form"><div className="personal-review-form-heading"><Typography.Text strong>개인 기록</Typography.Text><Typography.Text type="secondary">공개 메타데이터와 별도로 내 평가를 남겨보세요.</Typography.Text></div><Form.Item name="personalRating" label="나의 평점"><Rate allowHalf /></Form.Item><Form.Item name="recommendationWeight" label="추천 가중치"><InputNumber min={0.25} max={3} step={0.25} precision={2} className="full-width" /></Form.Item><div className="bgti-weight-editor"><div className="bgti-weight-heading"><div><Typography.Text strong>BGTI 가중치</Typography.Text><Typography.Text type="secondary">{bgtiSummary(selectedBgtiWeights as CollectionGame["bgtiWeights"])}</Typography.Text></div><Button size="small" onClick={applyAutoBgtiWeights}>태그/난이도로 자동 계산</Button></div><div className="bgti-weight-grid">{bgtiAxes.map((axis) => <Form.Item key={axis.key} name={["bgtiWeights", axis.key]} label={`${axis.code} ${axis.label}`} extra={axis.description}><Slider min={1} max={5} step={0.1} marks={{ 1: "1", 3: "3", 5: "5" }} /></Form.Item>)}</div></div><Form.Item name="review" label="한줄 리뷰"><Input.TextArea rows={2} placeholder="내가 느낀 재미와 추천 이유를 남겨보세요." /></Form.Item><Form.Item label="플레이 횟수"><div className="play-count-control"><Button htmlType="button" onClick={() => adjustPlayCount(-1)} aria-label="플레이 횟수 줄이기">-</Button><Form.Item name="plays" noStyle><Input type="number" min={0} inputMode="numeric" /></Form.Item><Button htmlType="button" onClick={() => adjustPlayCount(1)} aria-label="플레이 횟수 늘리기">+</Button></div></Form.Item></section>
                       <Form.Item name="videos" hidden getValueProps={() => ({})}><span /></Form.Item>
