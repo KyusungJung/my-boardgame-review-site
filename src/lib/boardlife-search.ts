@@ -22,6 +22,10 @@ function numberFrom(value?: string) {
   return match ? Number(match[0]) : undefined;
 }
 
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function mapSearchItems(items: BoardlifeApiItem[]): BoardlifeSearchResult[] {
   return items
     .filter((item) => item.number && item.title)
@@ -252,13 +256,16 @@ export async function searchBoardlife(word: string): Promise<BoardlifeSearchResu
   const boardlifeUrl = `${BOARDLIFE_BASE_URL}/search_autocomplete.php?query=${encodeURIComponent(normalizedWord)}`;
   try {
     return mapSearchItems(await fetchSearchItems(boardlifeUrl));
-  } catch {
+  } catch (error) {
+    console.warn("Boardlife autocomplete request failed:", errorMessage(error));
     try {
       return mapSearchItems(await fetchSearchItemsWithSession(boardlifeUrl));
-    } catch {
+    } catch (sessionError) {
+      console.warn("Boardlife autocomplete session request failed:", errorMessage(sessionError));
       try {
         return mapSearchItems(await fetchSearchItemsThroughReader(boardlifeUrl));
-      } catch {
+      } catch (readerError) {
+        console.warn("Boardlife autocomplete reader fallback failed:", errorMessage(readerError));
         const fallbackResults = new Map<string, BoardlifeSearchResult>();
         const [naverResults, ecosiaResults] = await Promise.all([
           searchBoardlifeThroughNaver(normalizedWord).catch(() => []),
