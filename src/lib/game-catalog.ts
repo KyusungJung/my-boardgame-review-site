@@ -44,6 +44,36 @@ const VERIFIED_GAME_CATALOG: GameCatalogEntry[] = [
     bggId: "458424",
     bggSlug: "captain-flip-isla-bomba",
   },
+  {
+    id: "518",
+    title: "하나비",
+    englishTitle: "Hanabi",
+    year: 2010,
+    thumbnail: "https://img.boardlife.co.kr/wys2/swf_upload/2022/01/12/1641926946514587_lg_w100.jpg",
+    image: "https://img.boardlife.co.kr/wys2/swf_upload/2022/01/12/1641926946514587_lg_w300.jpg",
+    bggId: "98778",
+    bggSlug: "hanabi",
+  },
+  {
+    id: "8373",
+    title: "하나비: 거대한 불꽃",
+    englishTitle: "Hanabi: Grands Feux",
+    year: 2015,
+    thumbnail: "https://img.boardlife.co.kr/wys2/swf_upload/2023/07/31/1690734168223555_lg_w100.jpg",
+    image: "https://img.boardlife.co.kr/wys2/swf_upload/2023/07/31/1690734168223555_lg_w300.jpg",
+    bggId: "290357",
+    bggSlug: "hanabi-deluxe-what-a-show",
+  },
+  {
+    id: "7771",
+    title: "하나비: 마스터 장인 확장",
+    englishTitle: "Hanabi: Master Artisan Expansion",
+    year: 2015,
+    thumbnail: "https://img.boardlife.co.kr/wys2/swf_upload/2023/04/21/1682017528336369_lg_w100.jpg",
+    image: "https://img.boardlife.co.kr/wys2/swf_upload/2023/04/21/1682017528336369_lg_w300.jpg",
+    bggId: "183833",
+    bggSlug: "hanabi-master-artisan-expansion",
+  },
 ];
 
 function normalizedSearchText(value: string) {

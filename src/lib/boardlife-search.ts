@@ -63,6 +63,7 @@ function normalizeSearchResultTitle(text: string) {
     .replace(/\s*\|\s*보드게임.*$/, "")
     .replace(/\s*게임정보$/, "")
     .replace(/\s*평가$/, "")
+    .replace(/\s*사진\s*$/, "")
     .replace(/\s*디자이너의 다른 작품\s*$/, "")
     .trim();
 

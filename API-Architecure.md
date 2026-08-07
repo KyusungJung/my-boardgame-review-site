@@ -4,13 +4,16 @@
 
 BoardShelf가 배포된 Vercel 환경에서도 Boardlife 게임 ID와 현재 화면에서 사용하는 메타데이터를 안정적으로 조회한다. 검색 결과와 상세 결과는 기존 `BoardlifeSearchResult`, `BoardGameMetadata` 형태를 유지해 화면과 저장 로직의 변경 범위를 줄인다.
 
-필수 검증 사례는 `뒤집어줘` 검색 시 다음 세 게임을 서버 검색 결과로 반환하는 것이다.
+필수 검증 사례는 `뒤집어줘`, `하나비` 검색 시 다음 게임들을 정확한 제목과 메타데이터를 포함한 서버 검색 결과로 반환하는 것이다.
 
 | Boardlife ID | 한글 제목 | 영문 제목 | BGG ID |
 | --- | --- | --- | --- |
 | `18905` | 뒤집어줘! 캡틴 | Captain Flip | `393325` |
 | `19591` | 뒤집어줘! 캡틴: 크라켄의 턱 | Captain Flip: In the Jaws of the Kraken | `413556` |
 | `21862` | 뒤집어줘! 캡틴: 폭탄 섬 | Captain Flip: Isla Bomba | `458424` |
+| `518` | 하나비 | Hanabi | `98778` |
+| `8373` | 하나비: 거대한 불꽃 | Hanabi: Grands Feux | `290357` |
+| `7771` | 하나비: 마스터 장인 확장 | Hanabi: Master Artisan Expansion | `183833` |
 
 ## 확인한 문제와 시도한 방법
 
@@ -30,7 +33,7 @@ BoardShelf가 배포된 Vercel 환경에서도 Boardlife 게임 ID와 현재 화
 ### Reader, 검색 엔진, sitemap
 
 - Jina Reader를 통한 Boardlife 접근도 Cloudflare 검증 페이지 또는 사용할 수 없는 본문을 반환했다.
-- Naver/Ecosia 인덱스 fallback은 `19591`, `21862`를 찾았지만 기본판 `18905`를 찾지 못했다. 검색 결과 제목에 `사진` 같은 페이지 문구가 붙는 문제도 있었다.
+- Naver/Ecosia 인덱스 fallback은 일부 게임을 누락했고 검색 링크의 접근성 문구인 `사진`을 제목으로 오인했다. fallback 제목 정제 단계에서 이 문구를 제거하고, 결과 누락이 확인된 검색군은 검증 카탈로그로 보완한다.
 - Boardlife sitemap에서 `/game/18905` 존재는 확인할 수 있었지만 sitemap에는 URL과 수정일만 있고 제목이 없어, 검색어에서 ID를 역으로 찾는 카탈로그 역할을 할 수 없었다.
 
 ### BoardGameGeek
@@ -95,6 +98,7 @@ BoardShelf가 배포된 Vercel 환경에서도 Boardlife 게임 ID와 현재 화
 
 - `npm run typecheck` 성공
 - 로컬 `/api/catalog/search?word=뒤집어줘`가 `18905`, `19591`, `21862`를 순서대로 반환
-- 세 상세 API가 각각 자신의 Boardlife ID, 제목, 표지와 메타데이터를 반환
-- 로컬 화면에서 세 검색 후보가 표시되고 선택 시 상세 필드가 채워짐
+- 로컬 `/api/catalog/search?word=하나비`가 `518`, `8373`, `7771`을 순서대로 반환하고 제목에 `사진`이 포함되지 않음
+- 검증 카탈로그의 상세 API가 각각 자신의 Boardlife ID, 제목, 표지와 메타데이터를 반환
+- 로컬 화면에서 검색어별 세 후보가 표시되고 선택 시 상세 필드가 채워짐
 - 배포 후 운영 API와 실제 게임 추가 화면에서도 같은 결과 확인
