@@ -8,8 +8,11 @@ const REQUEST_TIMEOUT_MS = 8_000;
 type BoardlifeApiItem = {
   number?: string | number;
   title?: string;
+  eng?: string;
   engtitle?: string;
+  year?: string | number;
   years?: string | number;
+  thumb?: string;
   bbs_img?: string;
   photo?: string;
 };
@@ -25,14 +28,22 @@ function mapSearchItems(items: BoardlifeApiItem[]): BoardlifeSearchResult[] {
     .map((item) => ({
       id: String(item.number),
       title: item.title ?? "이름 없음",
-      englishTitle: item.engtitle ?? "",
-      year: numberFrom(String(item.years ?? "")),
-      thumbnail: item.bbs_img,
+      englishTitle: item.eng ?? item.engtitle ?? "",
+      year: numberFrom(String(item.year ?? item.years ?? "")),
+      thumbnail: item.thumb ?? item.bbs_img,
       image: item.photo,
     }));
 }
 
 function parseSearchItems(body: string) {
+  try {
+    const parsed = JSON.parse(body) as BoardlifeApiItem[] | { results?: BoardlifeApiItem[] };
+    if (Array.isArray(parsed)) return parsed;
+    if (Array.isArray(parsed.results)) return parsed.results;
+  } catch {
+    // Reader fallbacks can wrap the JSON response in surrounding text.
+  }
+
   const firstBracket = body.search(/\[\s*\{/);
   const lastBracket = body.lastIndexOf("}]");
   if (firstBracket === -1 || lastBracket <= firstBracket) throw new Error(`Boardlife returned an invalid search response: ${body.slice(0, 80)}`);
@@ -238,7 +249,7 @@ export async function searchBoardlife(word: string): Promise<BoardlifeSearchResu
   const normalizedWord = word.trim();
   if (!normalizedWord) return [];
 
-  const boardlifeUrl = `${BOARDLIFE_BASE_URL}/get_auto_search.php?word=${encodeURIComponent(normalizedWord)}`;
+  const boardlifeUrl = `${BOARDLIFE_BASE_URL}/search_autocomplete.php?query=${encodeURIComponent(normalizedWord)}`;
   try {
     return mapSearchItems(await fetchSearchItems(boardlifeUrl));
   } catch {
