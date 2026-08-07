@@ -1,8 +1,6 @@
 import type { BoardlifeSearchResult } from "@/lib/types";
-import { enrichSearchResultWithBoardGameGeek } from "@/lib/boardgamegeek";
-import * as cheerio from "cheerio";
 
-const BOARDLIFE_BASE_URL = "https://boardlife.co.kr";
+const BOARDLIFE_SEARCH_URL = "https://boardlife.co.kr/search_autocomplete.php";
 const REQUEST_TIMEOUT_MS = 8_000;
 
 type BoardlifeApiItem = {
@@ -22,10 +20,6 @@ function numberFrom(value?: string) {
   return match ? Number(match[0]) : undefined;
 }
 
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
-}
-
 function mapSearchItems(items: BoardlifeApiItem[]): BoardlifeSearchResult[] {
   return items
     .filter((item) => item.number && item.title)
@@ -39,245 +33,33 @@ function mapSearchItems(items: BoardlifeApiItem[]): BoardlifeSearchResult[] {
     }));
 }
 
-function parseSearchItems(body: string) {
-  try {
-    const parsed = JSON.parse(body) as BoardlifeApiItem[] | { results?: BoardlifeApiItem[] };
-    if (Array.isArray(parsed)) return parsed;
-    if (Array.isArray(parsed.results)) return parsed.results;
-  } catch {
-    // Reader fallbacks can wrap the JSON response in surrounding text.
-  }
-
-  const firstBracket = body.search(/\[\s*\{/);
-  const lastBracket = body.lastIndexOf("}]");
-  if (firstBracket === -1 || lastBracket <= firstBracket) throw new Error(`Boardlife returned an invalid search response: ${body.slice(0, 80)}`);
-  return JSON.parse(body.slice(firstBracket, lastBracket + 2)) as BoardlifeApiItem[];
-}
-
-function normalizeSearchResultTitle(text: string) {
-  const title = text
-    .replace(/\s+/g, " ")
-    .replace(/\s*새 창 열림\s*$/, "")
-    .replace(/\s*-\s*보드라이프.*$/, "")
-    .replace(/\s*보드게임\s*정보\s*$/, "")
-    .replace(/\s*\|\s*보드게임.*$/, "")
-    .replace(/\s*게임정보$/, "")
-    .replace(/\s*평가$/, "")
-    .replace(/\s*사진\s*$/, "")
-    .replace(/\s*디자이너의 다른 작품\s*$/, "")
-    .trim();
-
-  if (!title || title.includes("boardlife.co.kr") || title.startsWith("보드라이프") || title.length > 60) return undefined;
-  return title;
-}
-
-function normalizedSearchText(value: string) {
-  return value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-}
-
-function compactSearchText(value: string) {
-  return normalizedSearchText(value).replace(/\s+/g, "");
-}
-
-function isRelevantSearchResult(result: BoardlifeSearchResult, word: string) {
-  const tokens = normalizedSearchText(word).split(/\s+/).filter((token) => token.length > 1);
-  if (!tokens.length) return true;
-
-  const candidateText = normalizedSearchText(`${result.title} ${result.englishTitle}`);
-  return tokens.every((token) => candidateText.includes(token));
-}
-
-function addSearchResult(results: Map<string, BoardlifeSearchResult>, result: BoardlifeSearchResult) {
-  const current = results.get(result.id);
-  results.set(result.id, {
-    ...current,
-    ...result,
-    englishTitle: result.englishTitle || current?.englishTitle || "",
-    year: result.year ?? current?.year,
-    image: result.image ?? current?.image,
-    thumbnail: result.thumbnail ?? current?.thumbnail,
-  });
-}
-
-function boardlifeHeaders(cookie?: string) {
-  return {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-    Accept: "application/json, text/javascript, */*; q=0.01",
-    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-    Origin: BOARDLIFE_BASE_URL,
-    Referer: `${BOARDLIFE_BASE_URL}/`,
-    "X-Requested-With": "XMLHttpRequest",
-    "Sec-Fetch-Dest": "empty",
-    "Sec-Fetch-Mode": "cors",
-    "Sec-Fetch-Site": "same-origin",
-    Cookie: cookie ? `${cookie}; happy_mobile=off` : "happy_mobile=off",
-  };
-}
-
-async function fetchBoardlifeCookieHeader() {
-  const response = await fetch(BOARDLIFE_BASE_URL, {
-    headers: boardlifeHeaders(),
-    cache: "no-store",
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
-  const getSetCookie = (response.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie;
-  const setCookies = getSetCookie ? getSetCookie.call(response.headers) : response.headers.get("set-cookie")?.split(/,(?=[^;,]+=)/) ?? [];
-  return setCookies.map((cookie) => cookie.split(";")[0]).filter(Boolean).join("; ");
-}
-
-async function fetchSearchItems(url: string) {
-  const response = await fetch(url, {
-    headers: boardlifeHeaders(),
-    cache: "no-store",
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
-  if (response.headers.get("cf-mitigated") === "challenge") throw new Error("Boardlife returned a Cloudflare challenge page.");
-  if (!response.ok) throw new Error(`Boardlife request failed (${response.status})`);
-  return parseSearchItems(await response.text());
-}
-
-async function fetchSearchItemsWithSession(url: string) {
-  const cookie = await fetchBoardlifeCookieHeader();
-  if (!cookie) throw new Error("Boardlife session cookie was not issued.");
-  const response = await fetch(url, {
-    headers: boardlifeHeaders(cookie),
-    cache: "no-store",
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
-  if (response.headers.get("cf-mitigated") === "challenge") throw new Error("Boardlife returned a Cloudflare challenge page.");
-  if (!response.ok) throw new Error(`Boardlife session request failed (${response.status})`);
-  return parseSearchItems(await response.text());
-}
-
-async function fetchSearchItemsThroughReader(boardlifeUrl: string) {
-  const response = await fetch(`https://r.jina.ai/http://${boardlifeUrl.replace(/^https?:\/\//, "")}`, { cache: "no-store", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-  if (!response.ok) throw new Error(`Boardlife fallback request failed (${response.status})`);
-
-  const body = await response.text();
-  return parseSearchItems(body);
-}
-
-async function searchBoardlifeThroughNaver(word: string) {
-  const searchUrl = `https://search.naver.com/search.naver?query=${encodeURIComponent(`site:boardlife.co.kr/game ${word}`)}`;
-  const response = await fetch(searchUrl, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-      "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-    },
-    cache: "no-store",
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
-  if (!response.ok) throw new Error(`Naver fallback request failed (${response.status})`);
-
-  const $ = cheerio.load(await response.text());
-  const results = new Map<string, BoardlifeSearchResult>();
-  const linkEntries = $("a[href*='boardlife.co.kr/game/']").toArray().map((element) => ({
-    element,
-    href: $(element).attr("href") ?? "",
-    text: $(element).text().replace(/\s+/g, " ").trim(),
-  }));
-
-  const englishTitleById = new Map<string, string>();
-  for (const entry of linkEntries) {
-    const id = entry.href.match(/boardlife\.co\.kr\/game\/(\d+)/)?.[1];
-    const englishTitle = entry.text.match(/\(([A-Za-z][^)]+)\)/)?.[1];
-    if (id && englishTitle && !englishTitleById.has(id)) englishTitleById.set(id, englishTitle);
-  }
-
-  $("a[href*='boardlife.co.kr/game/']").each((_, element) => {
-    const href = $(element).attr("href") ?? "";
-    const id = href.match(/boardlife\.co\.kr\/game\/(\d+)/)?.[1];
-    if (!id || results.has(id)) return;
-
-    const title = normalizeSearchResultTitle($(element).text());
-    if (!title) return;
-
-    const container = $(element).parents().toArray().slice(0, 6).find((parent) => $(parent).find("img[src]").filter((__, imageElement) => !(($(imageElement).attr("src") ?? "").includes("favicon"))).length);
-    const image = container ? $(container).find("img[src]").filter((__, imageElement) => !(($(imageElement).attr("src") ?? "").includes("favicon"))).first().attr("src") : undefined;
-
-    addSearchResult(results, {
-      id,
-      title,
-      englishTitle: englishTitleById.get(id) ?? "",
-      image,
-      thumbnail: image,
-    });
-  });
-
-  const orderedResults = [...results.values()];
-  const relevantResults = orderedResults.filter((result) => isRelevantSearchResult(result, word));
-  return relevantResults.slice(0, 10);
-}
-
-function parseBoardlifeSummarySearchResults(markdown: string) {
-  const results = new Map<string, BoardlifeSearchResult>();
-  const linkPattern = /## \[([^\]]+)\]\(https:\/\/boardlife\.co\.kr\/game\/(\d+)\)([\s\S]*?)(?=\n## \[|\n!\[Image|\n This search result|\n\[https?:\/\/|$)/g;
-
-  for (const match of markdown.matchAll(linkPattern)) {
-    const rawTitle = normalizeSearchResultTitle(match[1]) ?? "";
-    const id = match[2];
-    const summary = match[3]?.replace(/\s+/g, " ").trim() ?? "";
-    const summaryTitleMatch = summary.match(/^(.+?)(?=\([A-Za-z])/);
-    const englishTitleMatch = summary.match(/\(([A-Za-z].*)\)은/);
-    const title = rawTitle || summaryTitleMatch?.[1]?.trim() || "";
-    const englishTitle = englishTitleMatch?.[1]?.trim() ?? "";
-
-    if (id && title) addSearchResult(results, { id, title, englishTitle });
-  }
-
-  return [...results.values()];
-}
-
-function fallbackSearchQueries(word: string) {
-  const normalizedWord = word.trim();
-  const queries = [`${normalizedWord} boardlife`, `${normalizedWord} 보드라이프`];
-  if (compactSearchText(normalizedWord) === "백로성") queries.push(`${normalizedWord} 말차 boardlife`);
-  return [...new Set(queries)];
-}
-
-async function searchBoardlifeThroughEcosia(word: string) {
-  const results = new Map<string, BoardlifeSearchResult>();
-  for (const query of fallbackSearchQueries(word)) {
-    const response = await fetch(`https://r.jina.ai/http://www.ecosia.org/search?q=${encodeURIComponent(query)}`, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-    if (!response.ok) continue;
-    for (const result of parseBoardlifeSummarySearchResults(await response.text())) {
-      if (isRelevantSearchResult(result, word)) addSearchResult(results, result);
-    }
-  }
-  return [...results.values()];
-}
-
 export async function searchBoardlife(word: string): Promise<BoardlifeSearchResult[]> {
   const normalizedWord = word.trim();
   if (!normalizedWord) return [];
 
-  const boardlifeUrl = `${BOARDLIFE_BASE_URL}/search_autocomplete.php?query=${encodeURIComponent(normalizedWord)}`;
-  try {
-    return mapSearchItems(await fetchSearchItems(boardlifeUrl));
-  } catch (error) {
-    console.warn("Boardlife autocomplete request failed:", errorMessage(error));
-    try {
-      return mapSearchItems(await fetchSearchItemsWithSession(boardlifeUrl));
-    } catch (sessionError) {
-      console.warn("Boardlife autocomplete session request failed:", errorMessage(sessionError));
-      try {
-        return mapSearchItems(await fetchSearchItemsThroughReader(boardlifeUrl));
-      } catch (readerError) {
-        console.warn("Boardlife autocomplete reader fallback failed:", errorMessage(readerError));
-        const fallbackResults = new Map<string, BoardlifeSearchResult>();
-        const [naverResults, ecosiaResults] = await Promise.all([
-          searchBoardlifeThroughNaver(normalizedWord).catch(() => []),
-          searchBoardlifeThroughEcosia(normalizedWord).catch(() => []),
-        ]);
-        for (const result of naverResults) addSearchResult(fallbackResults, result);
-        for (const result of ecosiaResults) {
-          if (!fallbackResults.has(result.id)) addSearchResult(fallbackResults, result);
-        }
-        return Promise.all([...fallbackResults.values()].map((result) => enrichSearchResultWithBoardGameGeek(result)));
-      }
-    }
+  const response = await fetch(`${BOARDLIFE_SEARCH_URL}?query=${encodeURIComponent(normalizedWord)}`, {
+    cache: "no-store",
+    headers: {
+      Accept: "application/json, text/javascript, */*; q=0.01",
+      "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+      Referer: "https://boardlife.co.kr/",
+      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+      "X-Requested-With": "XMLHttpRequest",
+    },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+
+  if (response.headers.get("cf-mitigated") === "challenge") {
+    throw new Error("Boardlife returned a Cloudflare challenge page.");
   }
+  if (!response.ok) throw new Error(`Boardlife request failed (${response.status}).`);
+
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(`Boardlife returned an unexpected content type (${contentType || "unknown"}).`);
+  }
+
+  const payload = await response.json() as { results?: BoardlifeApiItem[] };
+  if (!Array.isArray(payload.results)) throw new Error("Boardlife returned an invalid search response.");
+  return mapSearchItems(payload.results);
 }

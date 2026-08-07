@@ -1,6 +1,7 @@
 import { getBoardGameGeekGameById } from "@/lib/boardgamegeek";
 import { getBoardlifeGame } from "@/lib/boardlife";
 import { searchBoardlife } from "@/lib/boardlife-search";
+import { getBoardlifeSearchSnapshot, getBoardlifeSnapshotGame } from "@/lib/boardlife-search-snapshots";
 import type { BoardGameMetadata, BoardlifeSearchResult } from "@/lib/types";
 
 const BOARDLIFE_BASE_URL = "https://boardlife.co.kr";
@@ -104,11 +105,20 @@ function catalogSearchResults(word: string) {
 }
 
 export async function searchGameCatalog(word: string): Promise<BoardlifeSearchResult[]> {
+  const snapshotResults = getBoardlifeSearchSnapshot(word);
+  if (snapshotResults) return snapshotResults;
+
   const verifiedResults = catalogSearchResults(word);
   if (verifiedResults.length) {
     return verifiedResults.map(({ bggId: _bggId, bggSlug: _bggSlug, metadata: _metadata, ...result }) => result);
   }
-  return searchBoardlife(word);
+
+  try {
+    return await searchBoardlife(word);
+  } catch (error) {
+    console.warn("Boardlife live search unavailable; returning no unverified results.", error);
+    return [];
+  }
 }
 
 function fallbackDescription(entry: GameCatalogEntry) {
@@ -117,7 +127,7 @@ function fallbackDescription(entry: GameCatalogEntry) {
 }
 
 export async function getGameCatalogMetadata(id: string, forceRefresh = false, seed?: GameMetadataSeed): Promise<BoardGameMetadata> {
-  const entry = VERIFIED_GAME_CATALOG.find((candidate) => candidate.id === id);
+  const entry: GameCatalogEntry | undefined = VERIFIED_GAME_CATALOG.find((candidate) => candidate.id === id) ?? getBoardlifeSnapshotGame(id);
   if (!entry) return getBoardlifeGame(id, forceRefresh, seed);
 
   const bggData = entry.bggId && entry.bggSlug

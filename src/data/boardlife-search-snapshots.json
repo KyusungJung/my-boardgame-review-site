@@ -1,0 +1,147 @@
+{
+  "generatedAt": "2026-08-07T12:25:12.066Z",
+  "queries": {
+    "뒤집어줘": {
+      "query": "뒤집어줘",
+      "results": [
+        {
+          "id": "18905",
+          "title": "뒤집어줘! 캡틴",
+          "englishTitle": "Captain Flip",
+          "year": 2024,
+          "thumbnail": "https://img.boardlife.co.kr/data/photo/2024/10/22/1729536110-255312_w100.png"
+        },
+        {
+          "id": "19591",
+          "title": "뒤집어줘! 캡틴: 크라켄의 턱",
+          "englishTitle": "Captain Flip: In the Jaws of the Kraken",
+          "year": 2024,
+          "thumbnail": "https://img.boardlife.co.kr/data/photo/2024/07/08/1720448183-313703_w100.jpg"
+        },
+        {
+          "id": "21862",
+          "title": "뒤집어줘! 캡틴: 폭탄 섬",
+          "englishTitle": "Captain Flip: Isla Bomba",
+          "year": 2026,
+          "thumbnail": "https://img.boardlife.co.kr/data/photo/2026/02/28/1772238774-68621_w100.jpeg"
+        }
+      ]
+    },
+    "브라스버밍엄": {
+      "query": "브라스 버밍엄",
+      "results": [
+        {
+          "id": "8569",
+          "title": "브라스: 버밍엄",
+          "englishTitle": "Brass: Birmingham",
+          "year": 2018,
+          "thumbnail": "https://img.boardlife.co.kr/data/photo/2025/05/04/1746339820-89884_w100.jpg"
+        }
+      ]
+    },
+    "아게모니아": {
+      "query": "아게모니아",
+      "results": [
+        {
+          "id": "19006",
+          "title": "아게모니아",
+          "englishTitle": "Agemonia",
+          "year": 2024,
+          "thumbnail": "https://img.boardlife.co.kr/data/photo/2024/03/20/1710870022-540997_w100.jpg"
+        },
+        {
+          "id": "22457",
+          "title": "아게모니아: 특기 & 의식",
+          "englishTitle": "Agemonia: Talents & Rituals",
+          "year": 2024,
+          "thumbnail": "https://img.boardlife.co.kr/data/photo/2026/07/30/1785373693-747813_w100.jpg"
+        },
+        {
+          "id": "22454",
+          "title": "아게모니아: 새로운 영웅들",
+          "englishTitle": "Agemonia: New Heroes",
+          "year": 2025,
+          "thumbnail": "https://img.boardlife.co.kr/data/photo/2026/07/30/1785372276-185748_w100.jpg"
+        },
+        {
+          "id": "22455",
+          "title": "아게모니아: 새로운 작은 것들",
+          "englishTitle": "Agemonia: New Little Things",
+          "year": 2025,
+          "thumbnail": "https://img.boardlife.co.kr/data/photo/2026/07/30/1785372874-27042_w100.jpg"
+        },
+        {
+          "id": "22456",
+          "title": "아게모니아: 더 강한 적들",
+          "englishTitle": "Agemonia: Stronger Enemies",
+          "year": 2025,
+          "thumbnail": "https://img.boardlife.co.kr/data/photo/2026/07/30/1785373297-756107_w100.jpg"
+        }
+      ]
+    },
+    "이레이저": {
+      "query": "이레이저",
+      "results": [
+        {
+          "id": "21483",
+          "title": "이레이저",
+          "englishTitle": "Eraser",
+          "year": 2024,
+          "thumbnail": "https://img.boardlife.co.kr/data/photo/2026/07/24/1784828105-519122_w100.png"
+        }
+      ]
+    },
+    "팬데믹레거시": {
+      "query": "팬데믹 레거시",
+      "results": [
+        {
+          "id": "5572",
+          "title": "팬데믹 레거시: 시즌 1",
+          "englishTitle": "Pandemic Legacy: Season 1",
+          "year": 2015,
+          "thumbnail": "https://img.boardlife.co.kr/data/photo/2024/04/07/1712424660-580537_w100.jpg"
+        },
+        {
+          "id": "9150",
+          "title": "팬데믹 레거시: 시즌 2",
+          "englishTitle": "Pandemic Legacy: Season 2",
+          "year": 2017,
+          "thumbnail": "https://img.boardlife.co.kr/wys2/swf_upload/2022/01/29/1643448054499515_lg_w100.jpg"
+        },
+        {
+          "id": "13425",
+          "title": "팬데믹 레거시: 시즌 0",
+          "englishTitle": "Pandemic Legacy: Season 0",
+          "year": 2020,
+          "thumbnail": "https://img.boardlife.co.kr/data/boardgame_strategy_reg/2020/09/28/1601282799-93154_w100.jpg"
+        }
+      ]
+    },
+    "하나비": {
+      "query": "하나비",
+      "results": [
+        {
+          "id": "518",
+          "title": "하나비",
+          "englishTitle": "Hanabi",
+          "year": 2010,
+          "thumbnail": "https://img.boardlife.co.kr/wys2/swf_upload/2022/01/12/1641926946514587_lg_w100.jpg"
+        },
+        {
+          "id": "8373",
+          "title": "하나비: 거대한 불꽃",
+          "englishTitle": "Hanabi: Grands Feux",
+          "year": 2015,
+          "thumbnail": "https://img.boardlife.co.kr/wys2/swf_upload/2023/07/31/1690734168223555_lg_w100.jpg"
+        },
+        {
+          "id": "7771",
+          "title": "하나비: 마스터 장인 확장",
+          "englishTitle": "Hanabi: Master Artisan Expansion",
+          "year": 2015,
+          "thumbnail": "https://img.boardlife.co.kr/wys2/swf_upload/2023/04/21/1682017528336369_lg_w100.jpg"
+        }
+      ]
+    }
+  }
+}

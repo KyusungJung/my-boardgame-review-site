@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "prisma generate && tsc --noEmit",
     "typecheck": "prisma generate && tsc --noEmit",
+    "catalog:sync": "node scripts/sync-boardlife-search-snapshots.mjs",
+    "catalog:verify": "node scripts/sync-boardlife-search-snapshots.mjs --check",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate"
