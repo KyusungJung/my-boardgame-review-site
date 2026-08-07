@@ -414,7 +414,7 @@ export function BoardShelfApp() {
       setSearching(true);
       setSearchError(null);
       try {
-        const response = await fetch(`/api/boardlife/search?word=${encodeURIComponent(deferredQuery)}`, { signal: controller.signal });
+        const response = await fetch(`/api/catalog/search?word=${encodeURIComponent(deferredQuery)}`, { signal: controller.signal });
         const result = await response.json() as BoardlifeSearchResult[] | { message?: string };
         if (!response.ok) throw new Error("message" in result ? result.message : "Boardlife 검색에 실패했습니다.");
         setCandidates(Array.isArray(result) ? result : []);
@@ -580,7 +580,7 @@ export function BoardShelfApp() {
         if (candidate.image) params.set("image", candidate.image);
         if (candidate.thumbnail) params.set("thumbnail", candidate.thumbnail);
         if (candidate.year) params.set("year", String(candidate.year));
-        const response = await fetch(`/api/boardlife/game/${candidate.id}?${params.toString()}`);
+        const response = await fetch(`/api/catalog/games/${candidate.id}?${params.toString()}`);
         const detail = await response.json() as BoardGameMetadata;
         if (!response.ok) throw new Error("상세 조회 실패");
         const resolved = { ...candidate, ...detail, image: detail.image || candidate.image, thumbnail: detail.thumbnail || candidate.thumbnail };

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { getBoardGameGeekDescription } from "@/lib/boardgamegeek";
-import { getBoardlifeGame } from "@/lib/boardlife";
-import { searchBoardlife } from "@/lib/boardlife-search";
+import { getGameCatalogMetadata, searchGameCatalog } from "@/lib/game-catalog";
 import { hasUsableGameDescription } from "@/lib/game-description";
 import { serializeGame } from "@/lib/game-records";
 import { prisma } from "@/lib/prisma";
@@ -33,8 +32,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const seed = { title: game.title, englishTitle: game.englishTitle, year: game.year ?? undefined, image: game.image ?? undefined, thumbnail: game.image ?? undefined };
     const [metadata, searchResults] = await Promise.all([
-      getBoardlifeGame(id, true, seed),
-      fields.has("image") ? searchBoardlife(game.title).catch(() => []) : Promise.resolve([]),
+      getGameCatalogMetadata(id, true, seed),
+      fields.has("image") ? searchGameCatalog(game.title).catch(() => []) : Promise.resolve([]),
     ]);
     const matchedSearchResult = searchResults.find((result) => result.id === id)
       ?? searchResults.find((result) => normalizedTitle(result.title) === normalizedTitle(game.title));

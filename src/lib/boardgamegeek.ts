@@ -5,6 +5,11 @@ const RETRY_DELAY_MS = 250;
 
 type BoardGameGeekMetadata = Partial<Pick<BoardGameMetadata, "year" | "image" | "thumbnail" | "minPlayers" | "maxPlayers" | "bestPlayers" | "minAge" | "playTime" | "complexity" | "boardlifeRating">>;
 
+export type BoardGameGeekGameData = {
+  metadata?: BoardGameGeekMetadata;
+  description?: string;
+};
+
 function numberFrom(value?: string) {
   const match = value?.match(/\d+(?:\.\d+)?/);
   return match ? Number(match[0]) : undefined;
@@ -126,6 +131,29 @@ async function getBoardGameGeekMarkdown(query?: string) {
   const response = await fetchWithRetry(`https://r.jina.ai/http://boardgamegeek.com/boardgame/${link.id}/${link.slug}`);
   if (!response.ok) throw new Error(`BoardGameGeek detail fallback failed (${response.status})`);
   return response.text();
+}
+
+async function getBoardGameGeekMarkdownById(id: string, slug: string) {
+  if (!/^\d+$/.test(id) || !/^[a-z0-9-]+$/.test(slug)) return undefined;
+  const response = await fetchWithRetry(`https://r.jina.ai/http://boardgamegeek.com/boardgame/${id}/${slug}`);
+  if (!response.ok) throw new Error(`BoardGameGeek detail fallback failed (${response.status})`);
+  return response.text();
+}
+
+export async function getBoardGameGeekGameById(id: string, slug: string): Promise<BoardGameGeekGameData | undefined> {
+  const markdown = await getBoardGameGeekMarkdownById(id, slug);
+  if (!markdown) return undefined;
+
+  const metadata = parseBoardGameGeekMarkdown(markdown);
+  const englishDescription = descriptionFromBoardGameGeekMarkdown(markdown);
+  const description = englishDescription
+    ? await translateToKorean(englishDescription).catch(() => englishDescription)
+    : undefined;
+
+  return {
+    metadata: Object.values(metadata).some((value) => value !== undefined) ? metadata : undefined,
+    description,
+  };
 }
 
 export async function getBoardGameGeekMetadata(query?: string): Promise<BoardGameGeekMetadata | undefined> {
