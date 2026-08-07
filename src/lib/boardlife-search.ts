@@ -48,6 +48,7 @@ function normalizeSearchResultTitle(text: string) {
     .replace(/\s*\|\s*보드게임.*$/, "")
     .replace(/\s*게임정보$/, "")
     .replace(/\s*평가$/, "")
+    .replace(/\s*디자이너의 다른 작품\s*$/, "")
     .trim();
 
   if (!title || title.includes("boardlife.co.kr") || title.startsWith("보드라이프") || title.length > 60) return undefined;
