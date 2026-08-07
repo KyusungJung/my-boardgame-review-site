@@ -206,7 +206,7 @@ async function searchBoardlifeThroughNaver(word: string) {
 
   const orderedResults = [...results.values()];
   const relevantResults = orderedResults.filter((result) => isRelevantSearchResult(result, word));
-  return (relevantResults.length ? relevantResults : orderedResults).slice(0, 10);
+  return relevantResults.slice(0, 10);
 }
 
 function parseBoardlifeSummarySearchResults(markdown: string) {
