@@ -40,6 +40,13 @@ BoardShelf가 배포된 Vercel 환경에서도 Boardlife 게임 ID와 현재 화
 - 따라서 검색엔진 HTML fallback을 검색 경로에서 완전히 제거했다. 이 결정으로 잘못된 결과를 반환하는 문제는 재발하지 않으며, 공식 데이터가 없는 검색은 추측하지 않고 빈 결과로 실패 폐쇄한다.
 - Boardlife sitemap에서 `/game/18905` 존재는 확인할 수 있었지만 sitemap에는 URL과 수정일만 있고 제목이 없어, 검색어에서 ID를 역으로 찾는 카탈로그 역할을 할 수 없었다.
 
+### Boardlife 순위 카탈로그
+
+- Boardlife가 실제 순위 화면에서 사용하는 `GET /rank_ajax.php?pg={page}`는 한 페이지에 100개 게임의 ID·한글 제목·영문 제목·연도·표지를 반환한다.
+- `X-Rank-More` 응답 헤더를 따라 214페이지까지 조회하면 21,377개 게임을 얻을 수 있다. autocomplete와 달리 페이지네이션이 정상 동작하므로 전체 검색 카탈로그의 동기화 원본으로 사용할 수 있다.
+- 첫 병렬 수집에서 90페이지 부근에 `429`가 발생했다. 동시 요청을 2개로 제한하고 배치 간 750ms 지연, `Retry-After` 및 점진 재시도를 적용해 공급자 요청 제한을 준수한다.
+- 이 카탈로그는 운영 요청 때 Boardlife에 접근하지 않는다. 신뢰 가능한 네트워크에서 동기화한 결과를 Vercel 서버가 로컬 검색한다.
+
 ### BoardGameGeek
 
 - BGG XML API는 인증 없이 호출하면 `Unauthorized`를 반환하므로 현재 배포 환경에서 공개 통합 API로 바로 사용할 수 없었다.
@@ -53,14 +60,15 @@ BoardShelf가 배포된 Vercel 환경에서도 Boardlife 게임 ID와 현재 화
   ├─ GET /api/catalog/search?word=...
   │    ├─ 공식 JSON 스냅샷 일치 → 동일한 결과·순서로 즉시 반환
   │    ├─ 검증된 상세 메타데이터 카탈로그 일치 → 즉시 반환
-  │    ├─ 스냅샷 불일치 + 원본 접근 가능 → Boardlife autocomplete JSON 반환
-  │    └─ 원본 차단 → [] (검색엔진 HTML로 결과를 만들지 않음)
+  │    ├─ 전체 공식 순위 카탈로그에서 한글·영문 제목 검색
+  │    ├─ 카탈로그 불일치 + 원본 접근 가능 → Boardlife autocomplete JSON 반환
+  │    └─ 원본 차단 + 카탈로그 불일치 → [] (검색엔진 HTML로 결과를 만들지 않음)
   └─ GET /api/catalog/games/:id
        ├─ 스냅샷/검증된 ID → Boardlife 기본 필드 + 정확한 BGG ID가 있으면 보강
        └─ 미등록 ID → 기존 Boardlife 상세 조회 및 fallback
 ```
 
-`src/data/boardlife-search-snapshots.json`은 검색 결과 HTML을 파싱한 데이터가 아니라, 신뢰 가능한 네트워크에서 원본 autocomplete JSON을 필드 변환만 해 저장한 결과다. 검색어별 배열을 그대로 보존하므로 결과 수와 순서도 Boardlife와 같다. 전체 Boardlife 데이터베이스의 복제본은 아니며, 스냅샷에 없는 검색어는 로컬처럼 원본 접근이 가능한 환경에서만 실시간 조회된다.
+`src/data/boardlife-search-snapshots.json`은 반드시 순서까지 같아야 하는 회귀 검색어의 autocomplete 원본을 보존한다. 일반 검색은 `src/data/boardlife-game-catalog.json`의 21,377개 공식 순위 카탈로그를 사용한다. 제목을 정규화해 한글·영문 부분 일치로 검색하고 정확히 일치하는 기본판을 먼저 노출한다. 결과 집합은 autocomplete와 일치하지만 Boardlife 내부 검색 정렬 규칙은 공개되지 않아 스냅샷이 없는 검색어의 노출 순서는 다를 수 있다.
 
 ## API 계약
 
@@ -93,10 +101,12 @@ BoardShelf가 배포된 Vercel 환경에서도 Boardlife 게임 ID와 현재 화
 3. `npm run catalog:verify`는 저장된 모든 검색어를 현재 원본 응답과 필드·순서까지 비교하고 차이가 있으면 종료 코드 1을 반환한다. 일부만 확인할 때는 검색어를 인자로 지정한다.
 4. 플레이 인원 등 상세 보강이 필요하고 정확한 BGG 항목을 확인한 경우에만 `VERIFIED_GAME_CATALOG`에 BGG ID와 slug를 추가한다.
 
+전체 카탈로그는 `npm run catalog:sync-all`로 갱신한다. `npm run catalog:verify-all`은 기본 회귀 검색어 `언락`, `스플렌더`, `카탄`, `아크 노바`의 ID 집합을 현재 autocomplete 원본과 비교한다. 별도 검색어도 명령 인자로 전달할 수 있다.
+
 ## 제한과 후속 선택지
 
 - Boardlife가 서버 호출을 공식 허용하거나 인증 가능한 API를 제공하면 실시간 공급자를 다시 1순위로 올릴 수 있다.
-- 스냅샷에 없는 검색어는 Vercel에서 빈 결과가 될 수 있다. 모든 검색어의 실시간 처리가 필요하면 Boardlife 측 API 허용 또는 Vercel 외부의 허용된 고정-IP relay가 필요하다. Cloudflare challenge 우회 자동화는 안정적이지 않고 공급자 정책에도 어긋날 수 있어 사용하지 않는다.
+- 순위 카탈로그에 아직 반영되지 않은 신규 등록 게임은 다음 동기화 전까지 검색되지 않을 수 있다. 완전한 실시간 처리가 필요하면 Boardlife 측 API 허용 또는 Vercel 외부의 허용된 고정-IP relay가 필요하다. Cloudflare challenge 우회 자동화는 안정적이지 않고 공급자 정책에도 어긋날 수 있어 사용하지 않는다.
 - 스냅샷 규모가 커지면 JSON 대신 DB 테이블로 옮겨도 API 계약과 동기화 규칙은 동일하게 유지할 수 있다.
 - 외부 페이지 구조나 번역 서비스 변경으로 BGG 보강 필드 일부가 비어도 검색 ID와 Boardlife 기본 메타데이터는 유지된다.
 
@@ -104,6 +114,7 @@ BoardShelf가 배포된 Vercel 환경에서도 Boardlife 게임 ID와 현재 화
 
 - `npm run typecheck` 성공
 - `npm run catalog:verify -- "아게모니아" "브라스 버밍엄" "팬데믹 레거시"` 성공
+- `npm run catalog:verify-all`에서 `언락` 47건, `스플렌더` 9건, `카탄` 65건, `아크 노바` 9건의 ID 집합이 원본과 일치
 - 로컬 `/api/catalog/search?word=뒤집어줘`가 `18905`, `19591`, `21862`를 순서대로 반환
 - 로컬 `/api/catalog/search?word=하나비`가 `518`, `8373`, `7771`을 순서대로 반환하고 제목에 `사진`이 포함되지 않음
 - 로컬 `/api/catalog/search?word=이레이저`가 `21483` 한 건만 반환하고 `찌리릿`, `지우개`를 반환하지 않음

@@ -1,7 +1,7 @@
 import { getBoardGameGeekGameById } from "@/lib/boardgamegeek";
 import { getBoardlifeGame } from "@/lib/boardlife";
 import { searchBoardlife } from "@/lib/boardlife-search";
-import { getBoardlifeSearchSnapshot, getBoardlifeSnapshotGame } from "@/lib/boardlife-search-snapshots";
+import { getBoardlifeSearchSnapshot, getBoardlifeSnapshotGame, searchBoardlifeGameCatalog } from "@/lib/boardlife-search-snapshots";
 import type { BoardGameMetadata, BoardlifeSearchResult } from "@/lib/types";
 
 const BOARDLIFE_BASE_URL = "https://boardlife.co.kr";
@@ -112,6 +112,9 @@ export async function searchGameCatalog(word: string): Promise<BoardlifeSearchRe
   if (verifiedResults.length) {
     return verifiedResults.map(({ bggId: _bggId, bggSlug: _bggSlug, metadata: _metadata, ...result }) => result);
   }
+
+  const catalogResults = searchBoardlifeGameCatalog(word);
+  if (catalogResults.length) return catalogResults;
 
   try {
     return await searchBoardlife(word);
