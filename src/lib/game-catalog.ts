@@ -133,6 +133,25 @@ export async function getGameCatalogMetadata(id: string, forceRefresh = false, s
   const entry: GameCatalogEntry | undefined = VERIFIED_GAME_CATALOG.find((candidate) => candidate.id === id) ?? getBoardlifeSnapshotGame(id);
   if (!entry) return getBoardlifeGame(id, forceRefresh, seed);
 
+  // Search snapshots intentionally contain only the autocomplete fields. They
+  // must not become the detail response, or games present in a snapshot will
+  // bypass Boardlife's detailed metadata entirely.
+  const detailSeed = { ...entry, ...seed };
+  try {
+    const boardlifeMetadata = await getBoardlifeGame(id, forceRefresh, detailSeed);
+    return {
+      ...entry,
+      ...boardlifeMetadata,
+      title: boardlifeMetadata.title === "이름 없음" ? entry.title : boardlifeMetadata.title,
+      englishTitle: boardlifeMetadata.englishTitle || entry.englishTitle,
+      year: boardlifeMetadata.year ?? entry.year,
+      image: boardlifeMetadata.image ?? entry.image ?? entry.thumbnail,
+      thumbnail: boardlifeMetadata.thumbnail ?? entry.thumbnail ?? entry.image,
+    };
+  } catch (error) {
+    console.warn(`Boardlife detail metadata failed for game ${id}; using catalog fallbacks.`, error);
+  }
+
   const bggData = entry.bggId && entry.bggSlug
     ? await getBoardGameGeekGameById(entry.bggId, entry.bggSlug).catch((error) => {
       console.warn(`Exact BoardGameGeek metadata failed for Boardlife game ${id}`, error);

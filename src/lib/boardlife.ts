@@ -68,6 +68,14 @@ function uniqueTags(tags: string[]) {
   return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))];
 }
 
+function gameInfoValue($: cheerio.CheerioAPI, labels: string[]) {
+  const item = $(".game-info-item").filter((_, element) => {
+    const label = $(element).find(".game-info-label").first().text().replace(/\s+/g, " ").trim();
+    return labels.includes(label);
+  }).first();
+  return item.find(".game-info-value").first().text().replace(/\s+/g, " ").trim() || undefined;
+}
+
 function gameDescriptionFromText(bodyText: string) {
   const description = textAfterLabel(bodyText, "게임 설명", ["+ 더보기", "관련 게임", "카테고리", "테마", "진행방식", "그룹", "게임 정보", "비슷한 게임", "댓글", "추천 게임", "리뷰"])
     ?.replace(/^(?:설명글\s*)?[:\-]?\s*/, "")
@@ -424,12 +432,14 @@ export async function getBoardlifeGame(id: string, forceRefresh = false, seed?: 
     const descriptionText = $("meta[name='description']").attr("content") ?? "";
     const metadataText = `${descriptionText} ${bodyText}`;
     const summaryMetadata = parseSummaryMetadata(descriptionText);
-    const playerSection = textAfterLabel(bodyText, "인원", ["플레이 시간", "사용 연령", "credit 정보"]);
+    const playerSection = gameInfoValue($, ["인원"]) ?? textAfterLabel(bodyText, "인원", ["플레이 시간", "사용 연령", "credit 정보"]);
     const playerRange = rangeFrom(playerSection);
+    const playerVote = $("[data-vtype='player'] .gvs-value").first().text();
+    const [bestPlayer, recommendedPlayer] = Array.from(playerVote.matchAll(/(\d+)인/g), (match) => Number(match[1]));
     const bestMatch = playerSection?.match(/베스트\s*:\s*(\d+)인/);
     const recommendedMatch = playerSection?.match(/추천\s*:\s*([^\)\s]+)/);
-    const playTime = textAfterLabel(bodyText, "플레이 시간", ["사용 연령", "credit 정보", "링크 정보"]);
-    const ageSection = textAfterLabel(bodyText, "사용 연령", ["credit 정보", "링크 정보", "게임 설명"]);
+    const playTime = gameInfoValue($, ["시간", "플레이 시간"]) ?? textAfterLabel(bodyText, "플레이 시간", ["사용 연령", "credit 정보", "링크 정보"]);
+    const ageSection = gameInfoValue($, ["연령", "사용 연령"]) ?? textAfterLabel(bodyText, "사용 연령", ["credit 정보", "링크 정보", "게임 설명"]);
     const ratingMatch = metadataText.match(/게임평점\s*(\d+(?:\.\d+)?)점/);
     const complexityMatch = metadataText.match(/난이도\s*(\d+(?:\.\d+)?)\s*점/);
     const languageDependency = textAfterLabel(bodyText, "언어의존도", ["편집", "주요 정보", "인원"]);
@@ -449,8 +459,8 @@ export async function getBoardlifeGame(id: string, forceRefresh = false, seed?: 
       sourceUrl: `${BOARDLIFE_BASE_URL}/game/${id}`,
       minPlayers: playerRange?.min ?? summaryMetadata.playerRange?.min,
       maxPlayers: playerRange?.max ?? summaryMetadata.playerRange?.max,
-      bestPlayers: bestMatch ? Number(bestMatch[1]) : undefined,
-      recommendedPlayers: recommendedMatch?.[1],
+      bestPlayers: bestPlayer ?? (bestMatch ? Number(bestMatch[1]) : undefined),
+      recommendedPlayers: recommendedPlayer ? `${recommendedPlayer}인` : recommendedMatch?.[1],
       minAge: numberFrom(ageSection) ?? summaryMetadata.minAge,
       playTime: playTime?.slice(0, 30) ?? summaryMetadata.playTime,
       complexity: (complexityMatch ? Number(complexityMatch[1]) : undefined) ?? summaryMetadata.complexity,
