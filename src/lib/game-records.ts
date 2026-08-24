@@ -42,6 +42,7 @@ export function serializeGame(game: GameWithTags): CollectionGame {
     review: game.review ?? undefined,
     plays: game.plays,
     status: game.status.toLowerCase() as CollectionGame["status"],
+    disposalReason: game.disposalReason ? game.disposalReason as CollectionGame["disposalReason"] : undefined,
     createdAt: game.createdAt.toISOString(),
     updatedAt: game.updatedAt.toISOString(),
     photos: game.photos.map((photo) => ({ id: photo.id, url: photo.url, caption: photo.caption ?? undefined, createdAt: photo.createdAt.toISOString() })),
@@ -83,6 +84,7 @@ export function gameDataFromInput(input: CollectionGame) {
     review: input.review?.trim() || null,
     plays: Math.max(0, input.plays ?? 0),
     status: Object.values(GameStatus).includes(status) ? status : GameStatus.OWNED,
+    disposalReason: status === GameStatus.DISPOSED ? input.disposalReason ?? null : null,
   };
 }
 

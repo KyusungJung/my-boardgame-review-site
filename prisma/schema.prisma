@@ -11,6 +11,7 @@ enum GameStatus {
   OWNED
   WISHLIST
   PLAYED
+  DISPOSED
 }
 
 model Game {
@@ -46,6 +47,7 @@ model Game {
   review              String?
   plays               Int         @default(0)
   status              GameStatus  @default(OWNED)
+  disposalReason      String?
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
   tags                GameTag[]

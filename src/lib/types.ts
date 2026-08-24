@@ -39,7 +39,8 @@ export type CollectionGame = BoardGameMetadata & {
   };
   review?: string;
   plays: number;
-  status: "owned" | "wishlist" | "played";
+  status: "owned" | "wishlist" | "played" | "disposed";
+  disposalReason?: "resold" | "gifted" | "lack_of_space" | "not_played" | "not_for_me" | "other";
   createdAt: string;
   updatedAt: string;
   photos: PlayPhoto[];

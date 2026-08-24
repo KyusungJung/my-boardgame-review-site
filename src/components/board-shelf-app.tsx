@@ -83,7 +83,16 @@ const navigationItems = [
   { key: "playlists", icon: <OrderedListOutlined />, label: "플레이리스트" },
 ];
 
-const statusLabel = { owned: "보유", wishlist: "위시리스트", played: "플레이 완료" } as const;
+const statusLabel = { owned: "보유", wishlist: "위시리스트", played: "플레이 완료", disposed: "방출" } as const;
+const disposalReasonLabel = {
+  resold: "중고 판매",
+  gifted: "선물·나눔",
+  lack_of_space: "공간 부족",
+  not_played: "플레이 빈도 낮음",
+  not_for_me: "취향과 맞지 않음",
+  other: "기타",
+} as const;
+const disposalReasonOptions = Object.entries(disposalReasonLabel).map(([value, label]) => ({ value, label }));
 const strategyTags = ["전략게임", "자원 승점", "엔진 빌딩", "일꾼 놓기", "덱,백,풀 빌딩", "영역 건설"];
 const partyTags = ["파티게임", "파티 게임", "운걸기", "주사위 굴림", "협력 게임", "어린이게임"];
 const familyTags = ["가족게임", "가족 게임", "어린이게임", "어린이 게임"];
@@ -150,8 +159,8 @@ function BoardlifeIcon() {
 }
 
 function GameStatusTag({ status }: { status: CollectionGame["status"] }) {
-  const icon = status === "wishlist" ? <HeartOutlined /> : status === "played" ? <PlayCircleOutlined /> : <CheckCircleOutlined />;
-  const color = status === "wishlist" ? "magenta" : status === "played" ? "green" : "blue";
+  const icon = status === "wishlist" ? <HeartOutlined /> : status === "played" ? <PlayCircleOutlined /> : status === "disposed" ? <InboxOutlined /> : <CheckCircleOutlined />;
+  const color = status === "wishlist" ? "magenta" : status === "played" ? "green" : status === "disposed" ? "orange" : "blue";
   return <Tag className="game-status-tag" color={color} icon={icon}>{statusLabel[status]}</Tag>;
 }
 
@@ -296,6 +305,7 @@ export function BoardShelfApp() {
   const [form] = Form.useForm<CollectionGame>();
   const selectedVideos = Form.useWatch("videos", form) ?? [];
   const selectedBgtiWeights = Form.useWatch("bgtiWeights", form);
+  const selectedStatus = Form.useWatch("status", form);
   const [messageApi, messageContext] = message.useMessage();
 
   useLayoutEffect(() => {
@@ -1187,7 +1197,8 @@ export function BoardShelfApp() {
                       <Form.Item name="tags" label="태그"><Select mode="tags" placeholder="태그를 입력하세요" options={collectionTags.map((tag) => ({ value: tag }))} /></Form.Item>
                       <Form.Item name="description" label="게임 설명" extra="직접 고쳐 쓸 수 있습니다. 검색 갱신은 즉시 저장되며, 직접 수정한 내용은 수정 저장으로 반영됩니다."><Input.TextArea rows={6} placeholder="게임 설명을 입력하세요." /></Form.Item>
                       <Space wrap className="metadata-refresh-actions"><Button className="description-refresh-button" loading={refreshingGameDescription} onClick={() => void refreshGameMetadata(["description"])}>게임 설명 검색·갱신</Button><Button loading={refreshingGameImage} onClick={() => void refreshGameMetadata(["image"])}>표지 사진 검색·갱신</Button></Space>
-                      <Form.Item name="status" label="보유 상태" initialValue="owned"><Radio.Group optionType="button" buttonStyle="solid"><Radio.Button value="owned">보유</Radio.Button><Radio.Button value="wishlist">위시리스트</Radio.Button><Radio.Button value="played">플레이 완료</Radio.Button></Radio.Group></Form.Item>
+                      <Form.Item name="status" label="상태" initialValue="owned"><Radio.Group optionType="button" buttonStyle="solid"><Radio.Button value="owned">보유</Radio.Button><Radio.Button value="wishlist">위시리스트</Radio.Button><Radio.Button value="played">플레이 완료</Radio.Button><Radio.Button value="disposed">방출</Radio.Button></Radio.Group></Form.Item>
+                      {selectedStatus === "disposed" ? <Form.Item name="disposalReason" label="방출 사유"><Select allowClear placeholder="방출한 이유를 선택하세요" options={disposalReasonOptions} /></Form.Item> : null}
                       <section className="personal-review-form"><div className="personal-review-form-heading"><Typography.Text strong>개인 기록</Typography.Text><Typography.Text type="secondary">공개 메타데이터와 별도로 내 평가를 남겨보세요.</Typography.Text></div><Form.Item name="personalRating" label="나의 평점"><Rate allowHalf /></Form.Item><Form.Item name="recommendationWeight" label="추천 가중치"><InputNumber min={0.25} max={3} step={0.25} precision={2} className="full-width" /></Form.Item><div className="bgti-weight-editor"><div className="bgti-weight-heading"><div><Typography.Text strong>BGTI 가중치</Typography.Text><Typography.Text type="secondary">{bgtiSummary(selectedBgtiWeights as CollectionGame["bgtiWeights"])}</Typography.Text></div><Button size="small" onClick={applyAutoBgtiWeights}>태그/난이도로 자동 계산</Button></div><div className="bgti-weight-grid">{bgtiAxes.map((axis) => <Form.Item key={axis.key} name={["bgtiWeights", axis.key]} label={`${axis.code} ${axis.label}`} extra={axis.description}><Slider min={1} max={5} step={0.1} marks={{ 1: "1", 3: "3", 5: "5" }} /></Form.Item>)}</div></div><Form.Item name="review" label="한줄 리뷰"><Input.TextArea rows={2} placeholder="내가 느낀 재미와 추천 이유를 남겨보세요." /></Form.Item><Form.Item label="플레이 횟수"><div className="play-count-control"><Button htmlType="button" onClick={() => adjustPlayCount(-1)} aria-label="플레이 횟수 줄이기">-</Button><Form.Item name="plays" noStyle><Input type="number" min={0} inputMode="numeric" /></Form.Item><Button htmlType="button" onClick={() => adjustPlayCount(1)} aria-label="플레이 횟수 늘리기">+</Button></div></Form.Item></section>
                       <Form.Item name="videos" hidden getValueProps={() => ({})}><span /></Form.Item>
                       <div className="video-section"><div className="video-section-heading"><div><Typography.Text strong><YoutubeOutlined /> 관련 YouTube 영상</Typography.Text><Typography.Text type="secondary">한 페이지에 최대 12개 영상을 보여 줍니다.</Typography.Text></div></div>{videoSearchError && <Alert type="info" showIcon message={videoSearchError} />}{videoCandidates.length > 0 && <><div className="video-candidate-grid">{videoCandidates.map((video) => { const isSelected = selectedVideos.some((item) => item.youtubeId === video.youtubeId); return <button className={`video-candidate ${isSelected ? "selected" : ""}`} key={video.youtubeId} type="button" onClick={() => toggleVideo(video)}><img src={video.thumbnail} alt="" /><span><strong>{video.title}</strong><small>{video.channelName}</small></span><Tag color={isSelected ? "blue" : "default"}>{isSelected ? "연결됨" : "선택"}</Tag></button>; })}</div>{videoSearchPageTokens.length > 1 && <div className="video-pagination"><Typography.Text type="secondary">검색 결과 {videoSearchPage}페이지</Typography.Text><Pagination size="small" current={videoSearchPage} total={videoSearchPageTokens.length} pageSize={1} showSizeChanger={false} onChange={(page) => selected && void searchRelatedVideos(selected, false, videoSearchPageTokens[page - 1], page)} /></div>}</>}{!searchingVideos && !videoSearchError && videoCandidates.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="검색된 YouTube 영상이 없습니다. 다른 영상 링크를 직접 추가할 수 있습니다." />}<Space.Compact className="manual-video-input"><Input value={manualVideoUrl} onChange={(event) => setManualVideoUrl(event.target.value)} placeholder="YouTube 영상 링크를 직접 추가" onPressEnter={() => void addManualVideo()} /><Button loading={addingManualVideo} onClick={() => void addManualVideo()}>링크 추가</Button></Space.Compact>{selectedVideos.length > 0 && <div className="selected-video-list">{selectedVideos.map((video) => <Tag closable key={video.youtubeId} onClose={() => toggleVideo(video)}>{video.title}</Tag>)}</div>}</div>
