@@ -299,6 +299,7 @@ export function BoardShelfApp() {
   const [savingPlaylist, setSavingPlaylist] = useState(false);
   const [savingRecommendationPlaylist, setSavingRecommendationPlaylist] = useState(false);
   const [draggingPlaylistGameId, setDraggingPlaylistGameId] = useState<string | null>(null);
+  const playlistGameIdsRef = useRef<string[]>([]);
   const [shareTargetPlaylist, setShareTargetPlaylist] = useState<GamePlaylist | null>(null);
   const [isHeroMobileViewport, setIsHeroMobileViewport] = useState(false);
   const hasCachedDashboardRef = useRef(false);
@@ -307,6 +308,8 @@ export function BoardShelfApp() {
   const selectedBgtiWeights = Form.useWatch("bgtiWeights", form);
   const selectedStatus = Form.useWatch("status", form);
   const [messageApi, messageContext] = message.useMessage();
+
+  playlistGameIdsRef.current = playlistGameIds;
 
   useLayoutEffect(() => {
     const snapshot = readDashboardSnapshot();
@@ -972,6 +975,60 @@ export function BoardShelfApp() {
     });
     setDraggingPlaylistGameId(null);
   }
+
+  useEffect(() => {
+    if (activeMenu !== "playlists") return;
+    const list = document.querySelector<HTMLElement>(".playlist-order-list");
+    if (!list) return;
+
+    let draggedItem: HTMLElement | null = null;
+    let pointerId: number | null = null;
+    const positionOf = (item: HTMLElement) => Array.from(list.querySelectorAll<HTMLElement>("article[draggable]")).indexOf(item);
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.pointerType !== "touch") return;
+      const target = event.target instanceof Element ? event.target.closest<HTMLElement>("article[draggable]") : null;
+      if (!target || !list.contains(target)) return;
+      draggedItem = target;
+      pointerId = event.pointerId;
+      list.setPointerCapture(event.pointerId);
+      setDraggingPlaylistGameId(playlistGameIdsRef.current[positionOf(target)] ?? null);
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      if (!draggedItem || event.pointerId !== pointerId) return;
+      event.preventDefault();
+      const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("article[draggable]");
+      if (!target || !list.contains(target) || target === draggedItem) return;
+      const sourceIndex = positionOf(draggedItem);
+      const targetIndex = positionOf(target);
+      if (sourceIndex < 0 || targetIndex < 0) return;
+      setPlaylistGameIds((current) => {
+        const reordered = [...current];
+        const [gameId] = reordered.splice(sourceIndex, 1);
+        if (!gameId) return current;
+        reordered.splice(targetIndex, 0, gameId);
+        playlistGameIdsRef.current = reordered;
+        return reordered;
+      });
+    };
+    const finishDrag = (event: PointerEvent) => {
+      if (event.pointerId !== pointerId) return;
+      draggedItem = null;
+      pointerId = null;
+      setDraggingPlaylistGameId(null);
+    };
+
+    list.addEventListener("pointerdown", onPointerDown);
+    list.addEventListener("pointermove", onPointerMove, { passive: false });
+    list.addEventListener("pointerup", finishDrag);
+    list.addEventListener("pointercancel", finishDrag);
+    return () => {
+      list.removeEventListener("pointerdown", onPointerDown);
+      list.removeEventListener("pointermove", onPointerMove);
+      list.removeEventListener("pointerup", finishDrag);
+      list.removeEventListener("pointercancel", finishDrag);
+    };
+  }, [activeMenu]);
 
   async function savePlaylist() {
     const title = playlistTitle.trim();
