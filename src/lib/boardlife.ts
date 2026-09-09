@@ -81,7 +81,10 @@ function gameDescriptionFromText(bodyText: string) {
     ?.replace(/^(?:설명글\s*)?[:\-]?\s*/, "")
     .trim();
 
-  return description && description !== "설명글" ? description.slice(0, 1500) : undefined;
+  // Boardlife renders explanatory UI text in this section even when a game has
+  // no submitted description. Do not save that UI copy as the game description.
+  if (!description || description === "설명글" || description.includes("등록된 설명이 없어요")) return undefined;
+  return description.slice(0, 1500);
 }
 
 function gameDescriptionFromReaderText(markdown: string) {

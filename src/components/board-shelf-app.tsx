@@ -665,6 +665,36 @@ export function BoardShelfApp() {
     if (isDescriptionRefresh) setRefreshingGameDescription(true);
     if (fields.includes("image")) setRefreshingGameImage(true);
     try {
+      if (!isEditingSelected) {
+        const params = new URLSearchParams({ title: selected.title, refresh: "1" });
+        if (selected.englishTitle) params.set("englishTitle", selected.englishTitle);
+        if (selected.year) params.set("year", String(selected.year));
+        if (selected.image) params.set("image", selected.image);
+        if (selected.thumbnail) params.set("thumbnail", selected.thumbnail);
+
+        const response = await fetch(`/api/catalog/games/${selected.id}?${params.toString()}`, { cache: "no-store" });
+        const metadata = await response.json() as BoardGameMetadata | { message?: string };
+        if (!response.ok || !("sourceUrl" in metadata)) throw new Error("message" in metadata ? metadata.message : "최신 게임 정보를 가져오지 못했습니다.");
+
+        if (fields.includes("description")) {
+          if (!hasUsableGameDescription(metadata.description)) {
+            messageApi.info("Boardlife에 등록된 게임 설명이 없습니다. 직접 입력한 뒤 저장할 수 있습니다.");
+          } else {
+            form.setFieldValue("description", metadata.description);
+            setSelected((current) => current?.id === selected.id ? { ...current, description: metadata.description } : current);
+            messageApi.success("게임 설명을 불러왔습니다. 컬렉션에 저장하면 반영됩니다.");
+          }
+        }
+        if (fields.includes("image")) {
+          const image = metadata.image ?? metadata.thumbnail;
+          if (!image) throw new Error("새 표지 사진을 찾지 못했습니다.");
+          form.setFieldValue("image", image);
+          setSelected((current) => current?.id === selected.id ? { ...current, image, thumbnail: metadata.thumbnail ?? image } : current);
+          messageApi.success("표지 사진을 불러왔습니다. 컬렉션에 저장하면 반영됩니다.");
+        }
+        return;
+      }
+
       const response = await fetch(`/api/games/${selected.id}/metadata`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fields }) });
       const result = await response.json() as { game?: CollectionGame; message?: string };
       if (!response.ok || !result.game) throw new Error(result.message ?? "최신 게임 정보를 저장하지 못했습니다.");
