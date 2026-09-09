@@ -987,7 +987,8 @@ export function BoardShelfApp() {
 
     const onPointerDown = (event: PointerEvent) => {
       if (event.pointerType !== "touch") return;
-      const target = event.target instanceof Element ? event.target.closest<HTMLElement>("article[draggable]") : null;
+      const handle = event.target instanceof Element ? event.target.closest<HTMLElement>(".playlist-position") : null;
+      const target = handle?.closest<HTMLElement>("article[draggable]");
       if (!target || !list.contains(target)) return;
       draggedItem = target;
       pointerId = event.pointerId;

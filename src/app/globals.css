@@ -169,7 +169,7 @@ body { margin: 0; color: rgba(0, 0, 0, .88); font-family: var(--font-sans); }
 @media (max-width: 768px) { input, textarea, select, .ant-input, .ant-input-number-input, .ant-input-affix-wrapper, .ant-select-selector { font-size: 16px !important; } }
 
 .bgti-type-card { width: 100%; color: inherit; cursor: pointer; text-align: left; }
-.playlist-order-list article { grid-template-columns: 28px 38px minmax(0, 1fr) auto; touch-action: none; }
+.playlist-order-list article { grid-template-columns: 28px 38px minmax(0, 1fr) auto; }.playlist-position { cursor: grab; touch-action: none; user-select: none; }.playlist-position:active { cursor: grabbing; }
 .bgti-type-card:focus-visible { border-color: #91caff; box-shadow: 0 10px 24px rgba(22,119,255,.1); outline: none; transform: translateY(-2px); }
 .bgti-test-section { display: grid; gap: 22px; padding: 32px; border: 1px solid #b7ebdf; border-radius: 14px; background: linear-gradient(135deg, #f6fffb 0%, #fff 72%); scroll-margin-top: 92px; }
 .bgti-test-heading { max-width: 700px; }.bgti-test-heading .ant-typography-h3 { margin: 0 0 6px; color: #1f2a44; font-size: 28px; letter-spacing: 0; }.bgti-test-heading .ant-typography-paragraph { margin: 0; color: rgba(31,42,68,.66); line-height: 1.65; }
