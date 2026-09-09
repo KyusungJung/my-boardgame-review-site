@@ -356,7 +356,7 @@ export function BoardShelfApp() {
 
   useEffect(() => {
     activeMenuRef.current = activeMenu;
-  }, [activeMenu]);
+  }, [activeMenu, isAdmin]);
 
   useEffect(() => {
     const mobileQuery = window.matchMedia("(max-width: 767px)");
