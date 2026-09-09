@@ -92,6 +92,25 @@ const VERIFIED_GAME_CATALOG: GameCatalogEntry[] = [
       autoTags: ["의사소통 제한", "추론", "파티 게임"],
     },
   },
+  {
+    id: "21271",
+    title: "죄악의 카니발",
+    englishTitle: "Carnival of Sins",
+    year: 2025,
+    thumbnail: "https://img.boardlife.co.kr/data/photo/2026/07/09/1783555482-972469_w100.png",
+    image: "https://img.boardlife.co.kr/data/photo/2026/07/09/1783555482-972469_w300.png",
+    bggId: "447379",
+    bggSlug: "carnival-of-sins",
+    metadata: {
+      minPlayers: 2,
+      maxPlayers: 5,
+      minAge: 14,
+      playTime: "10-20분",
+      boardlifeRating: 6.6,
+      description: "뉴올리언스의 카니발을 배경으로 주사위와 속임수를 활용하는 게임입니다. 7라운드 동안 각자 아직 사용하지 않은 일곱 죄악 카드 중 하나를 비밀리에 선택해 공개하고, 카드의 효과로 주사위를 가져오거나 조작하며 점수를 얻습니다. 마지막 라운드가 끝났을 때 가장 많은 점수를 얻은 플레이어가 카니발의 군주가 됩니다.",
+      autoTags: ["주사위 굴림", "핸드 관리", "카드 게임", "블러핑"],
+    },
+  },
 ];
 
 function normalizedSearchText(value: string) {
@@ -147,6 +166,15 @@ export async function getGameCatalogMetadata(id: string, forceRefresh = false, s
       year: boardlifeMetadata.year ?? entry.year,
       image: boardlifeMetadata.image ?? entry.image ?? entry.thumbnail,
       thumbnail: boardlifeMetadata.thumbnail ?? entry.thumbnail ?? entry.image,
+      minPlayers: boardlifeMetadata.minPlayers ?? entry.metadata?.minPlayers,
+      maxPlayers: boardlifeMetadata.maxPlayers ?? entry.metadata?.maxPlayers,
+      bestPlayers: boardlifeMetadata.bestPlayers ?? entry.metadata?.bestPlayers,
+      minAge: boardlifeMetadata.minAge ?? entry.metadata?.minAge,
+      playTime: boardlifeMetadata.playTime ?? entry.metadata?.playTime,
+      complexity: boardlifeMetadata.complexity ?? entry.metadata?.complexity,
+      boardlifeRating: boardlifeMetadata.boardlifeRating ?? entry.metadata?.boardlifeRating,
+      description: entry.metadata?.description ?? boardlifeMetadata.description,
+      autoTags: boardlifeMetadata.autoTags?.length ? boardlifeMetadata.autoTags : entry.metadata?.autoTags ?? [],
     };
   } catch (error) {
     console.warn(`Boardlife detail metadata failed for game ${id}; using catalog fallbacks.`, error);
