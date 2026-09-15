@@ -598,6 +598,9 @@ export function BoardShelfApp() {
         if (!response.ok) throw new Error("상세 조회 실패");
         const resolved = { ...candidate, ...detail, image: detail.image || candidate.image, thumbnail: detail.thumbnail || candidate.thumbnail };
         setSelected(resolved);
+        if (!resolved.minPlayers || !resolved.maxPlayers || !resolved.playTime || !resolved.minAge) {
+          messageApi.warning("상세정보 일부를 가져오지 못했습니다. 빈 항목을 확인하고 직접 입력해 주세요.");
+        }
         const tags = resolved.autoTags ?? [];
         form.setFieldsValue({ ...resolved, tags, personalRating: 0, recommendationWeight: 1, bgtiWeights: estimateBgtiWeights({ tags, complexity: resolved.complexity, playTime: resolved.playTime }), review: "", plays: 0, status: "owned", videos: [], createdAt: new Date().toISOString() });
         void searchRelatedVideos(resolved, true);
@@ -681,7 +684,7 @@ export function BoardShelfApp() {
 
         if (fields.includes("description")) {
           if (!hasUsableGameDescription(metadata.description)) {
-            messageApi.info("Boardlife에 등록된 게임 설명이 없습니다. 직접 입력한 뒤 저장할 수 있습니다.");
+            messageApi.info("게임 설명을 가져오지 못했습니다. 잠시 후 다시 시도하거나 직접 입력해 주세요.");
           } else {
             form.setFieldValue("description", metadata.description);
             setSelected((current) => current?.id === selected.id ? { ...current, description: metadata.description } : current);

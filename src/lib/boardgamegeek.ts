@@ -40,10 +40,15 @@ function bestBoardGameGeekLink(markdown: string, query: string) {
 
 async function findBoardGameGeekLink(query: string) {
   const searchUrl = `https://r.jina.ai/http://www.ecosia.org/search?q=${encodeURIComponent(`${query} boardgamegeek`)}`;
-  const response = await fetchWithRetry(searchUrl);
-  if (!response.ok) throw new Error(`BoardGameGeek search fallback failed (${response.status})`);
-  const ecosiaLink = bestBoardGameGeekLink(await response.text(), query);
-  if (ecosiaLink) return ecosiaLink;
+  try {
+    const response = await fetchWithRetry(searchUrl);
+    if (response.ok) {
+      const ecosiaLink = bestBoardGameGeekLink(await response.text(), query);
+      if (ecosiaLink) return ecosiaLink;
+    }
+  } catch {
+    // A failed primary search must not prevent the independent fallback.
+  }
 
   const naverResponse = await fetch(`https://search.naver.com/search.naver?query=${encodeURIComponent(`"${query}" boardgamegeek`)}`, {
     headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", "Accept-Language": "en-US,en;q=0.9" },

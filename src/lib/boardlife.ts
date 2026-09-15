@@ -191,7 +191,7 @@ function hasDetailedMetadata(metadata: BoardGameMetadata) {
 }
 
 function parseBoardlifeSummary(id: string, summary: string, seed?: BoardlifeDetailSeed): BoardGameMetadata | undefined {
-  if (!summary.includes("보드게임 종합")) return metadataFromSeed(id, seed);
+  if (!summary.includes("보드게임 종합")) return undefined;
   const titleMatch = summary.match(/^(.+?)(?:\(([^)]+)\))?은/);
   const title = titleMatch?.[1]?.trim() || seed?.title?.trim();
   if (!title) return undefined;
@@ -276,7 +276,7 @@ async function fetchBoardlifeGameHtml(id: string) {
 
 async function getBoardlifeGameThroughReader(id: string): Promise<BoardGameMetadata> {
   const sourceUrl = `${BOARDLIFE_BASE_URL}/game/${id}`;
-  const response = await fetch(`https://r.jina.ai/http://${sourceUrl.replace(/^https?:\/\//, "")}`, { cache: "no-store" });
+  const response = await fetch(`https://r.jina.ai/http://${sourceUrl.replace(/^https?:\/\//, "")}`, { cache: "no-store", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
   if (!response.ok) throw new Error(`Boardlife fallback request failed (${response.status})`);
 
   const bodyText = await response.text();
@@ -320,7 +320,7 @@ async function getBoardlifeGameThroughReader(id: string): Promise<BoardGameMetad
     autoTags: readerTags(bodyText),
     sourceFetchedAt: new Date().toISOString(),
   };
-  if (isUsableMetadata(result)) setCached(`detail:${id}`, result, DETAIL_CACHE_TTL);
+  if (isUsableMetadata(result) && hasDetailedMetadata(result)) setCached(`detail:${id}`, result, DETAIL_CACHE_TTL);
   return result;
 }
 
@@ -350,6 +350,7 @@ async function getBoardlifeGameFromNaverQuery(id: string, query: string, seed?: 
       "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
     },
     cache: "no-store",
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   if (!response.ok) throw new Error(`Naver detail fallback request failed (${response.status})`);
 
@@ -422,7 +423,7 @@ export async function searchBoardlife(word: string): Promise<BoardlifeSearchResu
 export async function getBoardlifeGame(id: string, forceRefresh = false, seed?: BoardlifeDetailSeed): Promise<BoardGameMetadata> {
   const key = `detail:${id}`;
   const cached = getCached<BoardGameMetadata>(key);
-  if (cached && !forceRefresh && (isUsableMetadata(cached) || !seed?.title)) return cached;
+  if (cached && !forceRefresh && (isUsableMetadata(cached) && hasDetailedMetadata(cached))) return cached;
 
   try {
     const html = await fetchBoardlifeGameHtml(id);
@@ -446,7 +447,8 @@ export async function getBoardlifeGame(id: string, forceRefresh = false, seed?: 
     const ratingMatch = metadataText.match(/게임평점\s*(\d+(?:\.\d+)?)점/);
     const complexityMatch = metadataText.match(/난이도\s*(\d+(?:\.\d+)?)\s*점/);
     const languageDependency = textAfterLabel(bodyText, "언어의존도", ["편집", "주요 정보", "인원"]);
-    const description = gameDescriptionFromText(bodyText) ?? descriptionText.trim();
+    const description = $(".game-description").first().text().replace(/\s+/g, " ").trim()
+      || gameDescriptionFromText(bodyText) || descriptionText.trim();
     const headingTexts = $("h1, h2, h3").map((_, element) => $(element).text().trim()).get();
     const englishTitle = headingTexts.find((heading) => /[A-Za-z]{3,}/.test(heading) && heading !== title) ?? "";
     const autoTags = uniqueTags($("a").filter((_, element) => /\/info\/(type|category|mechanisms)\/\d+/.test($(element).attr("href") ?? "")).map((_, element) => $(element).text()).get());
@@ -482,9 +484,11 @@ export async function getBoardlifeGame(id: string, forceRefresh = false, seed?: 
       sourceFetchedAt: new Date().toISOString(),
     };
 
-    setCached(key, result, DETAIL_CACHE_TTL);
-    return result;
-  } catch {
+    const enriched = await enrichMetadataWithBoardGameGeek(result);
+    if (hasDetailedMetadata(enriched)) setCached(key, enriched, DETAIL_CACHE_TTL);
+    return enriched;
+  } catch (error) {
+    console.warn(`Boardlife direct metadata unavailable for game ${id}; trying fallback sources.`, error);
     return getBoardlifeGameFallback(id, seed);
   }
 }

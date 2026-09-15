@@ -17,6 +17,24 @@ export type GameMetadataSeed = Partial<Pick<BoardlifeSearchResult, "title" | "en
 // Verified against Boardlife's autocomplete response and the corresponding BGG pages.
 const VERIFIED_GAME_CATALOG: GameCatalogEntry[] = [
   {
+    // Detail fields verified at https://boardlife.co.kr/game/5572 on 2026-09-16.
+    id: "5572",
+    title: "팬데믹 레거시: 시즌 1",
+    englishTitle: "Pandemic Legacy: Season 1",
+    year: 2015,
+    thumbnail: "https://img.boardlife.co.kr/data/photo/2024/04/07/1712424660-580537_w100.jpg",
+    image: "https://img.boardlife.co.kr/data/photo/2024/04/07/1712424660-580537_w300.jpg",
+    metadata: {
+      minPlayers: 2,
+      maxPlayers: 4,
+      minAge: 13,
+      playTime: "60분",
+      complexity: 2.83,
+      boardlifeRating: 8.4,
+      description: "질병 확산을 막기 위해 함께 행동하는 협력 캠페인 게임입니다. 여러 차례의 플레이에 걸쳐 이야기가 이어지며, 이전 게임의 결과가 다음 게임에 영향을 줍니다. 각자 맡은 역할의 능력을 활용해 도시의 질병을 치료하고 치료제를 연구합니다.",
+    },
+  },
+  {
     id: "18905",
     title: "뒤집어줘! 캡틴",
     englishTitle: "Captain Flip",
